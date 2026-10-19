@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import random
 from collections.abc import AsyncIterator
 from typing import Any
 
@@ -32,6 +34,8 @@ class GeminiLLM(BaseLLM):
         self,
         api_key: str,
         http_options: dict[str, Any] | None = None,
+        max_retries: int = 0,
+        retry_delay: float = 1.0,
     ) -> None:
         self._api_key = api_key
         self._http_options = types.HttpOptions(
@@ -41,26 +45,58 @@ class GeminiLLM(BaseLLM):
         self._connection: Any = None
         self._session: Any = None
         self._connected = False
+        self._max_retries = max_retries
+        self._retry_delay = retry_delay
 
     async def connect(self, config: LLMConfig) -> None:
-        """Open a Gemini Live session using the provider-neutral config."""
-        self._client = genai.Client(
-            api_key=self._api_key,
-            http_options=self._http_options,
-        )
-        self._connection = self._client.aio.live.connect(
-            model=config.model,
-            config=self._build_live_config(config),
-        )
+        """Open a Gemini Live session using the provider-neutral config with retry."""
+        attempt = 0
+        while self._max_retries == 0 or attempt < self._max_retries:
+            try:
+                self._client = genai.Client(
+                    api_key=self._api_key,
+                    http_options=self._http_options,
+                )
+                self._connection = self._client.aio.live.connect(
+                    model=config.model,
+                    config=self._build_live_config(config),
+                )
 
-        try:
-            self._session = await self._connection.__aenter__()
-            self._connected = True
-        except Exception as exc:
-            self._session = None
-            self._connection = None
-            self._connected = False
-            self._raise_provider_error("Failed to connect to Gemini Live", exc)
+                try:
+                    self._session = await self._connection.__aenter__()
+                    self._connected = True
+                except Exception as exc:
+                    self._session = None
+                    self._connection = None
+                    self._connected = False
+                    classification = self.classify_error(exc)
+                    if classification == "transient":
+                        if self._max_retries > 0 and attempt + 1 >= self._max_retries:
+                            self._raise_provider_error(
+                                "Failed to connect to Gemini Live after retries", exc
+                            )
+                        await asyncio.sleep(
+                            self._retry_delay
+                            * (2**attempt)
+                            * (1 + self._retry_jitter())
+                        )
+                        attempt += 1
+                        continue
+                    self._raise_provider_error("Failed to connect to Gemini Live", exc)
+                break
+            except Exception as exc:
+                classification = self.classify_error(exc)
+                if classification == "transient":
+                    if self._max_retries > 0 and attempt + 1 >= self._max_retries:
+                        self._raise_provider_error(
+                            "Failed to connect to Gemini Live after retries", exc
+                        )
+                    await asyncio.sleep(
+                        self._retry_delay * (2**attempt) * (1 + self._retry_jitter())
+                    )
+                    attempt += 1
+                    continue
+                self._raise_provider_error("Failed to connect to Gemini Live", exc)
 
     @staticmethod
     def _convert_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -89,11 +125,7 @@ class GeminiLLM(BaseLLM):
             output_audio_transcription=types.AudioTranscriptionConfig(),
             input_audio_transcription=types.AudioTranscriptionConfig(),
             system_instruction=config.system_instruction,
-            tools=(
-                [{"function_declarations": declarations}]
-                if declarations
-                else []
-            ),
+            tools=([{"function_declarations": declarations}] if declarations else []),
             realtime_input_config=types.RealtimeInputConfig(
                 automatic_activity_detection=types.AutomaticActivityDetection(
                     start_of_speech_sensitivity=(
@@ -149,9 +181,55 @@ class GeminiLLM(BaseLLM):
         )
 
     async def receive(self) -> AsyncIterator[LLMEvent]:
+        """Yield normalized events received from the model with retry and timeout."""
+        attempt = 0
+        while self._max_retries == 0 or attempt < self._max_retries:
+            try:
+                timeout = self._retry_delay * (2**attempt) * (1 + self._retry_jitter())
+                async for event in self._receive_with_timeout(timeout):
+                    yield event
+                break
+            except asyncio.TimeoutError:
+                if self._max_retries > 0 and attempt + 1 >= self._max_retries:
+                    yield LLMEvent(
+                        type=LLMEventType.ERROR,
+                        data="Receive timeout after max retries",
+                    )
+                    return
+                await asyncio.sleep(
+                    self._retry_delay * (2**attempt) * (1 + self._retry_jitter())
+                )
+                attempt += 1
+                continue
+            except Exception as exc:
+                classification = self.classify_error(exc)
+                if classification == "normal_close":
+                    yield LLMEvent(type=LLMEventType.CLOSE)
+                    return
+                if classification == "transient":
+                    if self._max_retries > 0 and attempt + 1 >= self._max_retries:
+                        yield LLMEvent(
+                            type=LLMEventType.ERROR,
+                            data="Transient error after max retries",
+                        )
+                        return
+                    await asyncio.sleep(
+                        self._retry_delay * (2**attempt) * (1 + self._retry_jitter())
+                    )
+                    attempt += 1
+                    continue
+                yield LLMEvent(type=LLMEventType.ERROR, data=exc)
+                raise
+
+    async def _receive_with_timeout(self, timeout: float) -> AsyncIterator[LLMEvent]:
+        """Iterate session.receive() with a wall-clock timeout, yielding normalized events."""
+        deadline = asyncio.get_event_loop().time() + timeout
         session = self._require_session()
         try:
             async for response in session.receive():
+                if asyncio.get_event_loop().time() > deadline:
+                    raise asyncio.TimeoutError("Receive timed out")
+                # Normalize the response into LLMEvent(s)
                 server_content = getattr(response, "server_content", None)
                 model_turn = getattr(server_content, "model_turn", None)
                 if model_turn:
@@ -197,12 +275,10 @@ class GeminiLLM(BaseLLM):
                             args=dict(function_call.args or {}),
                         ),
                     )
-        except Exception as exc:
-            if self.classify_error(exc) == "normal_close":
-                yield LLMEvent(type=LLMEventType.CLOSE)
-                return
-            yield LLMEvent(type=LLMEventType.ERROR, data=exc)
+        except asyncio.TimeoutError:
             raise
+        except Exception as exc:
+            raise exc
 
     async def close(self) -> None:
         connection = self._connection
@@ -230,7 +306,8 @@ class GeminiLLM(BaseLLM):
         ):
             return "unsupported_voice"
         if status in {401, 403} or any(
-            marker in message for marker in ("api key", "unauthenticated", "permission denied")
+            marker in message
+            for marker in ("api key", "unauthenticated", "permission denied")
         ):
             return "permanent"
         if status == 429 or (isinstance(status, int) and status >= 500):
@@ -246,6 +323,10 @@ class GeminiLLM(BaseLLM):
         if not self._connected or self._session is None:
             raise LLMConnectionError("Not connected to Gemini Live")
         return self._session
+
+    def _retry_jitter(self) -> float:
+        """Return jitter factor in [0, retry_jitter_ratio] for backoff delay."""
+        return random.random() * self._retry_delay / 10.0
 
     def _raise_provider_error(self, message: str, error: Exception) -> None:
         classification = self.classify_error(error)

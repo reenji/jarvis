@@ -21,6 +21,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 class LLMSettings(BaseSettings):
     provider: Literal["gemini", "openai", "ollama"] = "gemini"
+    fallback_providers: List[str] = []
 
     # API keys
     gemini_api_key: Optional[str] = None
@@ -78,8 +79,8 @@ class RuntimeSettings(BaseSettings):
     # Fractional jitter applied on top of the base exponential delay
     reconnect_jitter_ratio: float = 0.15
 
-    # Limit jitter absolute added delay to this fraction of base delay.
-    # Set 0 to disable jitter entirely (keeps deterministic delay).
+    # Base delay (seconds) for exponential backoff when reconnect_backoff_enabled
+    reconnect_backoff_base_delay: float = 1.0
 
     class Config:
         env_prefix = "ARGUS_RUNTIME_"
@@ -110,8 +111,8 @@ class Settings(BaseSettings):
         if not isinstance(v, dict):
             v = {}
 
-        # GEMINI_API_KEY legacy key
-        env_gemini_key = os.environ.get("GEMINI_API_KEY")
+        # GEMINI_API_KEY legacy key — check prefixed var first, then bare var
+        env_gemini_key = os.environ.get("ARGUS_LLM_GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
         if env_gemini_key:
             v.setdefault("gemini_api_key", env_gemini_key)
         elif v.get("gemini_api_key") is None and legacy.get("api_key"):
@@ -175,7 +176,8 @@ def get_api_key() -> str:
     settings = get_settings()
     if not settings.llm.gemini_api_key:
         raise ValueError(
-            "GEMINI_API_KEY not set. Set via environment GEMINI_API_KEY "
+            "GEMINI_API_KEY not set. Set via environment "
+            "ARGUS_LLM_GEMINI_API_KEY or GEMINI_API_KEY, "
             "or config/api_keys.json"
         )
     return settings.llm.gemini_api_key

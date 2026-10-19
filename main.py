@@ -315,9 +315,9 @@ def wait_for_startup_claps(
     return True
 
 def _get_api_key() -> str:
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("ARGUS_LLM_GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
     if not api_key:
-        raise ValueError("GEMINI_API_KEY environment variable not set. Please set it to your Gemini API key.")
+        raise ValueError("GEMINI_API_KEY not set. Set via environment ARGUS_LLM_GEMINI_API_KEY or GEMINI_API_KEY.")
     return api_key
 
 
