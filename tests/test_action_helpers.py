@@ -111,7 +111,7 @@ class ActionHelperTests(unittest.TestCase):
         run.assert_called_once()
         self.assertEqual(run.call_args.args[0], ["open", str(target)])
 
-    def test_email_prepare_requires_separate_approval(self):
+    def test_email_prepare_leaves_an_unsent_draft_without_asking_for_approval(self):
         email_control._clear_pending_email()
         with (
             patch.object(email_control, "_run_osascript") as script,
@@ -123,7 +123,7 @@ class ActionHelperTests(unittest.TestCase):
                 "subject": "Project update",
                 "body": "The presentation is ready.",
             })
-        self.assertTrue(result.startswith("EMAIL_APPROVAL_REQUIRED|"))
+        self.assertTrue(result.startswith("EMAIL_DRAFT_READY|"))
         pending = email_control._get_pending_email()
         self.assertEqual(pending["to"], "alex@example.com")
         self.assertEqual(pending["delivery"], "gmail_web")
@@ -429,7 +429,7 @@ class ActionHelperTests(unittest.TestCase):
                 "platform": "spotify",
                 "query": "Daft Punk One More Time",
             })
-        self.assertIn("Select a result", result)
+        self.assertIn("I will click the matching track", result)
         open_uri.assert_called_once_with("spotify:search:Daft%20Punk%20One%20More%20Time")
 
     def test_spotify_link_is_played_directly_on_macos(self):
@@ -499,41 +499,39 @@ class ActionHelperTests(unittest.TestCase):
         self.assertIn("no longer matches", result)
         send.assert_not_called()
 
-    def test_reply_draft_requires_approval_before_send(self):
+    def test_requested_reply_sends_without_an_approval_step(self):
         send_message._clear_pending_message()
-        prepared = send_message.prepare_message_reply({
-            "action": "prepare",
-            "platform": "iMessage",
-            "receiver": "Alex",
-            "message_text": "I will call you later",
-        })
-        self.assertTrue(prepared.startswith("MESSAGE_APPROVAL_REQUIRED|"))
         with patch.object(send_message, "send_message", return_value="Message sent to Alex via iMessage.") as direct_send:
-            result = send_message.prepare_message_reply({"action": "approve"})
+            result = send_message.prepare_message_reply({
+                "action": "prepare",
+                "platform": "iMessage",
+                "receiver": "Alex",
+                "message_text": "I will call you later",
+            })
         self.assertIn("Message sent", result)
         direct_send.assert_called_once()
         self.assertEqual(send_message._get_pending_message(), {})
 
-    def test_instagram_send_prepares_then_approves_visible_draft(self):
+    def test_instagram_send_submits_verified_draft_in_same_call(self):
         send_message._clear_pending_message()
         with patch.object(
             send_message,
-            "_resolve_platform",
-            return_value=lambda _receiver, _message: "Draft typed in the open Instagram chat. Awaiting your approval to send.",
-        ):
-            prepared = send_message.send_message({
+            "_controlled_instagram_prepare_draft",
+            return_value="Draft typed in the verified Instagram chat.",
+        ) as prepare, patch.object(
+            send_message,
+            "_controlled_instagram_send_draft",
+            return_value="Message sent to Alex via Instagram.",
+        ) as send:
+            result = send_message.send_message({
                 "action": "send",
                 "platform": "Instagram",
                 "receiver": "Alex",
                 "message_text": "Hello there",
             })
-        self.assertIn("Awaiting your approval", prepared)
-        self.assertEqual(send_message._get_pending_message()["receiver"], "Alex")
-
-        with patch.object(send_message, "send_open_browser_draft", return_value="Message sent to Alex via Instagram.") as approve:
-            result = send_message.send_message({"action": "approve", "platform": "Instagram"})
         self.assertIn("Message sent", result)
-        approve.assert_called_once()
+        prepare.assert_called_once()
+        send.assert_called_once()
         self.assertEqual(send_message._get_pending_message(), {})
 
     def test_pending_message_can_be_cancelled_without_sending(self):

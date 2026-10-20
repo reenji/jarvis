@@ -1,9 +1,9 @@
-"""Read Gmail and prepare approval-gated email in a visible compose window.
+"""Read Gmail and prepare or send email through the configured provider.
 
 Gmail reading uses Google's desktop OAuth flow. Refresh credentials are stored
 only in the operating-system keychain, never in a token file. New Gmail drafts
-are typed into ARGUS's controlled browser and sent only after a later explicit
-approval. Pending drafts live in memory only.
+are typed into ARGUS's controlled browser. User-requested sends verify and send
+the composed message directly. Pending drafts live in memory only.
 """
 
 from __future__ import annotations
@@ -748,7 +748,7 @@ async def _gmail_web_prepare_once(session, draft: dict[str, str], player=None) -
         if address.lower() not in recipient_text.lower():
             raise RuntimeError(f"Gmail did not retain recipient {address}")
     await page.bring_to_front()
-    _gmail_login_progress(player, "Draft complete; awaiting approval")
+    _gmail_login_progress(player, "Draft complete; sending")
     return "GMAIL_WEB_DRAFT_READY"
 
 
@@ -800,14 +800,14 @@ async def _gmail_web_send_async(session, draft: dict[str, str]) -> str:
         'div[role="textbox"][aria-label*="Message Body" i]',
     ), timeout_seconds=4.0)
     if subject is None or body is None:
-        return "The approved Gmail compose window is no longer available. Nothing was sent."
+        return "The requested Gmail compose window is no longer available. Nothing was sent."
 
     visible_subject = await subject.input_value()
     visible_body = await body.inner_text()
     if _normalized_visible_text(visible_subject) != _normalized_visible_text(draft["subject"]):
-        return "The visible Gmail subject changed after approval was requested. Nothing was sent. Prepare the email again."
+        return "The visible Gmail subject changed after it was prepared. Nothing was sent. Prepare the email again."
     if _normalized_visible_text(visible_body) != _normalized_visible_text(draft["body"]):
-        return "The visible Gmail body changed after approval was requested. Nothing was sent. Prepare the email again."
+        return "The visible Gmail body changed after it was prepared. Nothing was sent. Prepare the email again."
 
     compose_text = await _gmail_visible_recipient_text(page)
     for address in [item.strip() for item in (draft["to"] + "," + draft.get("cc", "") + "," + draft.get("bcc", "")).split(",") if item.strip()]:
@@ -831,7 +831,7 @@ async def _gmail_web_send_async(session, draft: dict[str, str]) -> str:
         except Exception:
             button_still_visible = False
         if button_still_visible:
-            return "Gmail did not confirm the send. The pending approval remains active."
+            return "Gmail did not confirm the send. The pending draft remains available."
     return "GMAIL_WEB_SENT"
 
 
@@ -1082,7 +1082,18 @@ end run
     return f"Subject: {subject or '(No subject)'}\nFrom: {sender}\nReceived: {received}\n\n{content}"
 
 
-def _prepare_email(params: dict, player=None) -> str:
+def _send_email_draft(draft: dict[str, str]) -> str:
+    if draft.get("delivery") == "gmail_web":
+        return _gmail_web_send(draft)
+    provider = draft.get("provider", "gmail")
+    if provider == "gmail":
+        return _send_gmail(draft)
+    if provider == "apple_mail" and _SYSTEM == "Darwin":
+        return _send_macos(draft)
+    return "Direct sending is unavailable for the default mail app. Choose Gmail or Apple Mail on macOS."
+
+
+def _prepare_email(params: dict, player=None, *, send_now: bool = False) -> str:
     to = _normalize_recipients(params.get("to", ""))
     cc = _normalize_recipients(params.get("cc", ""))
     bcc = _normalize_recipients(params.get("bcc", ""))
@@ -1114,14 +1125,18 @@ def _prepare_email(params: dict, player=None) -> str:
             return result
         draft["delivery"] = "gmail_web"
     _set_pending_email(draft)
+    if send_now:
+        return _send_email_draft(draft)
+    if provider in {"apple_mail", "default"}:
+        return _open_default_draft(draft)
     preview = body if len(body) <= 800 else body[:800].rstrip() + "…"
     copies = (f"\nCc: {cc}" if cc else "") + (f"\nBcc: {bcc}" if bcc else "")
     return (
-        "EMAIL_APPROVAL_REQUIRED|A pending email is ready. Nothing has been sent.\n"
-        + ("ARGUS opened Gmail and visibly typed this draft. It remains open for your review.\n" if provider == "gmail" else "")
+        "EMAIL_DRAFT_READY|Nothing has been sent.\n"
+        + "ARGUS opened Gmail and visibly typed this draft. It remains open for your review.\n"
         + f"Provider: {'Gmail' if provider == 'gmail' else 'Apple Mail' if provider == 'apple_mail' else 'Default mail app'}\n"
         f"To: {to}{copies}\nSubject: {subject}\n\n{preview}\n\n"
-        "Ask the user to approve, revise, or cancel this exact email."
+        "This draft is ready. Do not say it was sent."
     )
 
 
@@ -1195,7 +1210,7 @@ def _open_default_draft(draft: dict[str, str]) -> str:
             if result.returncode != 0:
                 return f"Could not open the email draft: {(result.stderr or result.stdout).strip()}"
         _clear_pending_email()
-        return "The approved email draft is open in your default mail application. Review it there and press Send."
+        return "The email draft is open in your default mail application. Nothing was sent."
     except Exception as exc:
         return f"Could not open the email draft: {exc}"
 
@@ -1207,7 +1222,6 @@ def email_control(parameters: dict | None = None, response=None, player=None, se
         "list": "inbox",
         "recent": "inbox",
         "compose": "prepare",
-        "send": "prepare",
         "cancel_draft": "cancel",
         "login": "connect",
         "authorize": "connect",
@@ -1264,18 +1278,13 @@ def email_control(parameters: dict | None = None, response=None, player=None, se
         return "Email reading for this provider is unavailable."
     if action == "prepare":
         return _prepare_email(params, player=player)
+    if action == "send":
+        return _prepare_email(params, player=player, send_now=True)
     if action == "approve":
         draft = _get_pending_email()
         if not draft:
             return "There is no pending email to approve."
-        draft_provider = draft.get("provider", "gmail")
-        if draft.get("delivery") == "gmail_web":
-            return _gmail_web_send(draft)
-        if draft_provider == "gmail":
-            return _send_gmail(draft)
-        if draft_provider == "apple_mail" and _SYSTEM == "Darwin":
-            return _send_macos(draft)
-        return _open_default_draft(draft)
+        return _send_email_draft(draft)
     if action == "cancel":
         draft = _get_pending_email()
         if not draft:

@@ -27,11 +27,7 @@ from core.voice_preferences import (
     normalize_response_style,
     normalize_silence_ms,
 )
-from core.tool_approval import (
-    ToolApprovalManager,
-    draft_fingerprint,
-    explicit_message_request_matches,
-)
+from core.tool_approval import ToolApprovalManager
 
 
 def _lazy_action(module_name: str, attribute: str):
@@ -454,16 +450,16 @@ TOOL_DECLARATIONS = [
     {
         "name": "prepare_message_reply",
         "description": (
-            "Creates an approval-gated message draft, approves the current pending draft, or cancels it. "
-            "Never approve unless the user explicitly confirms the exact pending draft."
+            "Sends a reply the user asked ARGUS to write, or sends/cancels a legacy pending draft. "
+            "Do not ask for a second approval after the user has asked to reply. Clarify only a genuinely ambiguous recipient or meaning."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action": {"type": "STRING", "enum": ["prepare", "approve", "cancel"], "description": "Draft lifecycle action."},
+                "action": {"type": "STRING", "enum": ["prepare", "approve", "cancel"], "description": "prepare sends the requested reply; approve/cancel handles a legacy pending draft."},
                 "platform": {"type": "STRING", "description": "Instagram, iMessage, WhatsApp, Telegram, or another supported platform."},
                 "receiver": {"type": "STRING", "description": "Recipient name. Optional for the currently open chat."},
-                "message_text": {"type": "STRING", "description": "Exact draft text, required for prepare."}
+                "message_text": {"type": "STRING", "description": "Reply text to send."}
             },
             "required": ["action"]
         }
@@ -471,16 +467,17 @@ TOOL_DECLARATIONS = [
     {
         "name": "send_message",
         "description": (
-            "Sends a user-authored message through iMessage, WhatsApp, Telegram, Instagram, Discord, or the current chat. "
-            "For Instagram, the first call prepares a visible draft; use action=approve only after explicit user confirmation."
+            "Sends a user-authored message through iMessage, WhatsApp, Telegram, Instagram, Discord, Messenger, Signal, or the current chat. "
+            "Send directly after the user asks; do not ask for approval. Resolve the requested recipient and focus the correct message composer before typing. "
+            "For Instagram, verify the visible recipient and draft, then send during this call."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action":       {"type": "STRING", "enum": ["send", "approve", "cancel"], "description": "Default: send. Approve/cancel operates on the pending draft."},
-                "receiver":     {"type": "STRING", "description": "Recipient contact name. Optional for current/focused chats and approval actions."},
-                "message_text": {"type": "STRING", "description": "Exact message content. Required for send."},
-                "platform":     {"type": "STRING", "description": "iMessage, WhatsApp, Telegram, Instagram, Discord, or current/focused."}
+                "action":       {"type": "STRING", "enum": ["send", "approve", "cancel"], "description": "Default: send immediately. Approve/cancel handles a legacy pending draft."},
+                "receiver":     {"type": "STRING", "description": "Recipient contact name. Leave empty for the currently open chat."},
+                "message_text": {"type": "STRING", "description": "Message content to send."},
+                "platform":     {"type": "STRING", "description": "iMessage, WhatsApp, Telegram, Instagram, Discord, Messenger, Signal, or current/focused."}
             },
             "required": ["platform"]
         }
@@ -488,18 +485,17 @@ TOOL_DECLARATIONS = [
     {
         "name": "email_control",
         "description": (
-            "Connects Gmail through Google OAuth, checks connection status, reads/searches Gmail, and prepares email. "
+            "Connects Gmail through Google OAuth, checks connection status, reads/searches Gmail, prepares drafts, and sends email. "
             "Gmail is the default provider; Apple Mail remains an optional macOS fallback. "
-            "For Gmail, prepare opens a visible compose window and types To, Cc/Bcc, Subject, and Body in sequence. "
-            "Every outgoing email is approval-gated: first call action=prepare, then call action=approve "
-            "only after the user explicitly confirms the exact pending recipient, subject, and body."
+            "For Gmail, send opens a visible compose window, types and verifies To, Cc/Bcc, Subject, and Body, then sends directly when the user has asked to send. "
+            "Use action=prepare only to create an unsent draft."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "action": {
                     "type": "STRING",
-                    "enum": ["connect", "status", "disconnect", "inbox", "unread", "search", "read", "prepare", "approve", "cancel"],
+                    "enum": ["connect", "status", "disconnect", "inbox", "unread", "search", "read", "prepare", "send", "approve", "cancel"],
                     "description": "Email operation."
                 },
                 "provider": {
@@ -521,8 +517,8 @@ TOOL_DECLARATIONS = [
                 "to": {"type": "STRING", "description": "Recipient email address or comma-separated addresses."},
                 "cc": {"type": "STRING", "description": "Optional Cc addresses."},
                 "bcc": {"type": "STRING", "description": "Optional Bcc addresses."},
-                "subject": {"type": "STRING", "description": "Exact email subject for prepare."},
-                "body": {"type": "STRING", "description": "Exact email body for prepare."}
+                "subject": {"type": "STRING", "description": "Exact email subject for send or prepare."},
+                "body": {"type": "STRING", "description": "Exact email body for send or prepare."}
             },
             "required": ["action"]
         }
@@ -563,7 +559,9 @@ TOOL_DECLARATIONS = [
         "description": (
             "Controls music playback, primarily Spotify. Use when the user asks to play, resume, pause, "
             "stop, toggle, skip, or go back in Spotify, Apple Music, YouTube Music, or the active media player. "
-            "Spotify is the default platform. Pass a song, artist, album, playlist, or Spotify link in query."
+            "Spotify is the default platform. Pass a song, artist, album, playlist, or Spotify link in query. "
+            "When a plain Spotify search opens results, immediately use computer_control screen_click to select "
+            "the matching visible track; do not ask the user to choose it."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -1421,25 +1419,6 @@ class ArgusLive:
         self._queue_self_quit_after_farewell()
         return f'Shutdown queued. Say exactly: "{SELF_QUIT_GOODBYE}"'
 
-    @staticmethod
-    def _pending_draft_fingerprint(kind: str) -> str:
-        if kind == "email":
-            module = importlib.import_module("actions.email_control")
-            draft = module._get_pending_email()
-        else:
-            module = importlib.import_module("actions.send_message")
-            draft = module._get_pending_message()
-        if not draft:
-            return ""
-        # Exclude timestamps and retain only fields that define the outgoing content.
-        keys = (
-            ("provider", "delivery", "to", "cc", "bcc", "subject", "body")
-            if kind == "email"
-            else ("platform", "receiver", "message_text")
-        )
-        content = {key: str(draft.get(key, "") or "") for key in keys}
-        return draft_fingerprint(content)
-
     def _tool_approval_block(self, name: str, args: dict) -> str | None:
         """Enforce later-turn approval for sensitive dispatches."""
         manager = self._tool_approvals()
@@ -1470,45 +1449,7 @@ class ArgusLive:
                 elif action in {"poweroff", "power_off", "shutdown_computer"}:
                     args["action"] = "shutdown"
 
-        if name == "email_control" and action == "approve":
-            fingerprint = self._pending_draft_fingerprint("email")
-            if not fingerprint:
-                return "There is no code-verified pending email approval. Nothing was sent."
-            allowed, result = manager.approve_draft("email", fingerprint)
-            return None if allowed else result
-
-        if (
-            name == "prepare_message_reply" and action in {"approve", "confirm", "send"}
-        ) or (
-            name == "send_message" and action in {"approve", "confirm"}
-        ):
-            fingerprint = self._pending_draft_fingerprint("message")
-            if not fingerprint:
-                return "There is no code-verified pending message approval. Nothing was sent."
-            allowed, result = manager.approve_draft("message", fingerprint)
-            return None if allowed else result
-
-        if name == "send_message" and action not in {"approve", "confirm", "cancel", "discard", "deny"}:
-            if manager.turn_complete and explicit_message_request_matches(manager.transcript, args):
-                return None
-            allowed, result = manager.request_operation(name, args)
-            return None if allowed else result
-
         return None
-
-    def _record_pending_draft(self, name: str, args: dict, result: str) -> None:
-        text = str(result or "")
-        kind = ""
-        if name == "email_control" and "EMAIL_APPROVAL_REQUIRED|" in text:
-            kind = "email"
-        elif name == "prepare_message_reply" and "MESSAGE_APPROVAL_REQUIRED|" in text:
-            kind = "message"
-        elif name == "send_message" and "draft typed" in text.casefold():
-            kind = "message"
-        if kind:
-            fingerprint = self._pending_draft_fingerprint(kind)
-            if fingerprint:
-                self._tool_approvals().register_draft(kind, fingerprint)
 
     def update_voice(self, voice_name: str):
         self.voice_name = _normalize_voice_name(voice_name)
@@ -1899,8 +1840,6 @@ class ArgusLive:
             result = f"Tool '{name}' failed: {e}"
             traceback.print_exc()
             self.speak_error(name, e)
-
-        self._record_pending_draft(name, args, str(result or ""))
 
         if not self.ui.muted:
             self.ui.set_state("LISTENING")

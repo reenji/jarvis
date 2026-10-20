@@ -1025,7 +1025,7 @@ class _InstagramBrowser:
             "created_at": time.time(),
             "url": page.url,
         }
-        return f"Draft typed in the open Instagram chat. Awaiting your approval to send."
+        return f"Draft typed in the verified Instagram chat."
 
     def _send_draft(self) -> str:
         page = self._open_inbox()
@@ -1047,8 +1047,8 @@ class _InstagramBrowser:
         visible_draft = re.sub(r"\s+", " ", self._composer_text(page)).strip()
         if not visible_draft or visible_draft != expected:
             return (
-                "The visible Instagram draft no longer matches the approved message, so I did not send it. "
-                "Cancel and prepare the message again."
+                "The visible Instagram draft no longer matches the requested message, so I did not send it. "
+                "Prepare the message again."
             )
         if not self._send_composer(page):
             return (

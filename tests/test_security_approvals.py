@@ -177,7 +177,7 @@ class LiveDispatchApprovalTests(unittest.TestCase):
             self.assertEqual(second.response["result"], "shutdown requested")
             self.assertEqual(power.call_args.kwargs["parameters"]["confirmed"], "yes")
 
-    def test_direct_message_without_verbatim_user_text_is_queued(self):
+    def test_direct_message_sends_on_the_users_order_without_extra_approval(self):
         args = {
             "action": "send",
             "platform": "WhatsApp",
@@ -186,13 +186,8 @@ class LiveDispatchApprovalTests(unittest.TestCase):
         }
         self._user_turn("Tell Alice I will be 5 minutes late")
         with patch.object(self.main, "send_message", return_value="Message sent") as send:
-            first = asyncio.run(self.argus._execute_tool(self._call("send_message", args)))
-            send.assert_not_called()
-            self.assertIn("No action was performed", first.response["result"])
-
-            self._user_turn("yes")
-            second = asyncio.run(self.argus._execute_tool(self._call("send_message", args)))
-            self.assertEqual(second.response["result"], "Message sent")
+            result = asyncio.run(self.argus._execute_tool(self._call("send_message", args)))
+            self.assertEqual(result.response["result"], "Message sent")
             send.assert_called_once()
 
     def test_direct_message_with_verbatim_user_request_is_sent_once(self):
@@ -208,7 +203,7 @@ class LiveDispatchApprovalTests(unittest.TestCase):
         self.assertEqual(result.response["result"], "Message sent")
         send.assert_called_once()
 
-    def test_email_approval_requires_later_confirmation_for_same_pending_draft(self):
+    def test_user_order_sends_email_without_an_extra_approval_turn(self):
         email_module = importlib.import_module("actions.email_control")
         email_module._clear_pending_email()
         draft = {
@@ -225,33 +220,20 @@ class LiveDispatchApprovalTests(unittest.TestCase):
         def fake_email(parameters, **_kwargs):
             action = parameters.get("action")
             actions.append(action)
-            if action == "prepare":
-                email_module._set_pending_email(draft)
-                return "EMAIL_APPROVAL_REQUIRED|draft is visible"
-            return "Email sent"
+            if action == "send":
+                return "Email sent"
+            return "EMAIL_DRAFT_READY|draft is visible"
 
         with patch.object(self.main, "email_control", side_effect=fake_email):
-            self._user_turn("prepare the email")
-            prepared = asyncio.run(self.argus._execute_tool(self._call(
-                "email_control", {"action": "prepare", "to": draft["to"]}
-            )))
-            self.assertIn("EMAIL_APPROVAL_REQUIRED", prepared.response["result"])
-
-            same_turn = asyncio.run(self.argus._execute_tool(self._call(
-                "email_control", {"action": "approve", "provider": "gmail"}
-            )))
-            self.assertIn("later user turn", same_turn.response["result"])
-            self.assertEqual(actions, ["prepare"])
-
-            self._user_turn("yes")
+            self._user_turn("Send the email to Alex")
             sent = asyncio.run(self.argus._execute_tool(self._call(
-                "email_control", {"action": "approve", "provider": "gmail"}
+                "email_control", {"action": "send", "to": draft["to"]}
             )))
             self.assertEqual(sent.response["result"], "Email sent")
-            self.assertEqual(actions, ["prepare", "approve"])
+            self.assertEqual(actions, ["send"])
         email_module._clear_pending_email()
 
-    def test_reply_approval_requires_later_confirmation_for_same_message(self):
+    def test_requested_reply_sends_without_a_second_approval_turn(self):
         message_module = importlib.import_module("actions.send_message")
         message_module._clear_pending_message()
         draft = {
@@ -264,33 +246,15 @@ class LiveDispatchApprovalTests(unittest.TestCase):
         def fake_reply(parameters, **_kwargs):
             action = parameters.get("action")
             actions.append(action)
-            if action == "prepare":
-                message_module._set_pending_message(
-                    draft["platform"], draft["receiver"], draft["message_text"]
-                )
-                return "MESSAGE_APPROVAL_REQUIRED|draft ready"
-            message_module._clear_pending_message()
             return "Message sent"
 
         with patch.object(self.main, "prepare_message_reply", side_effect=fake_reply):
-            self._user_turn("prepare a reply")
-            prepared = asyncio.run(self.argus._execute_tool(self._call(
+            self._user_turn("Reply to Alex that I will call later")
+            sent = asyncio.run(self.argus._execute_tool(self._call(
                 "prepare_message_reply", {"action": "prepare", **draft}
             )))
-            self.assertIn("MESSAGE_APPROVAL_REQUIRED", prepared.response["result"])
-
-            same_turn = asyncio.run(self.argus._execute_tool(self._call(
-                "prepare_message_reply", {"action": "approve"}
-            )))
-            self.assertIn("later user turn", same_turn.response["result"])
-            self.assertEqual(actions, ["prepare"])
-
-            self._user_turn("sim, pode enviar")
-            sent = asyncio.run(self.argus._execute_tool(self._call(
-                "prepare_message_reply", {"action": "approve"}
-            )))
             self.assertEqual(sent.response["result"], "Message sent")
-            self.assertEqual(actions, ["prepare", "approve"])
+            self.assertEqual(actions, ["prepare"])
         message_module._clear_pending_message()
 
 
