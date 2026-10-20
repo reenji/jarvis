@@ -57,7 +57,9 @@ from PyQt6.QtWidgets import (
 def _base_dir() -> Path:
     if getattr(sys, "frozen", False):
         return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
-    return Path(__file__).resolve().parent
+    # This module lives in the ui/ package, but assets and local config live
+    # beside main.py at the project root.
+    return Path(__file__).resolve().parent.parent
 
 BASE_DIR   = _base_dir()
 CONFIG_DIR = BASE_DIR / "config"

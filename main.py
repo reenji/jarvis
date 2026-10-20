@@ -2158,9 +2158,22 @@ class ArgusLive:
                     print(f"[ARGUS] ⚠️ {e}")
                     traceback.print_exc()
 
+def _configure_console_encoding():
+    """Keep Unicode startup messages from crashing legacy Windows consoles."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if not callable(reconfigure):
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            pass
+
+
 def main():
     import sys
 
+    _configure_console_encoding()
     if "--self-test" in sys.argv[1:]:
         from scripts.self_test import main as self_test_main
 
