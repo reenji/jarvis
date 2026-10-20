@@ -20,7 +20,7 @@ WINDOWS_TEXT_ROLES = {
     "Document": "AXTextArea",
     "ComboBox": "AXComboBox",
 }
-BROWSER_APPS = {"Google Chrome", "Brave Browser", "Microsoft Edge", "Arc", "Safari"}
+BROWSER_APPS = {"Google Chrome", "Brave Browser", "Microsoft Edge", "Firefox", "Opera", "Arc", "Safari"}
 MESSAGING_APPS = {"Messages", "WhatsApp", "Telegram", "Discord", "Signal", "Messenger"}
 SAFE_POINTER_MESSAGE_APPS = BROWSER_APPS | MESSAGING_APPS
 UNSAFE_TYPING_APPS = {
@@ -64,6 +64,8 @@ MESSAGE_LABEL_MARKERS = MESSAGE_LABEL_MARKERS + (
 
 WINDOWS_APP_NAMES = {
     "chrome.exe": "Google Chrome",
+    "firefox.exe": "Firefox",
+    "opera.exe": "Opera",
     "brave.exe": "Brave Browser",
     "msedge.exe": "Microsoft Edge",
     "arc.exe": "Arc",
@@ -659,7 +661,10 @@ def _pointer_message_target() -> SafeTextEntryResult:
     )
 
 
-def validate_safe_text_target(purpose: str = "generic", allow_pointer_fallback: bool = False) -> SafeTextEntryResult:
+def validate_safe_text_target(
+    purpose: str = "generic", allow_pointer_fallback: bool = False,
+    allow_browser_search: bool = False,
+) -> SafeTextEntryResult:
     purpose_key = str(purpose or "generic").lower().strip()
     os_name = _actual_os()
     if os_name == "mac":
@@ -669,7 +674,7 @@ def validate_safe_text_target(purpose: str = "generic", allow_pointer_fallback: 
         if _matches_name(front_app, BROWSER_APPS) and dom.get("ok") and _dom_textish(dom):
             label = " ".join(str(dom.get(k, "")) for k in ("label", "role", "tag"))
             url = str(dom_info.get("url") or dom.get("url") or "")
-            if _contains_any(label, ADDRESS_LABEL_MARKERS):
+            if _contains_any(label, ADDRESS_LABEL_MARKERS) and not allow_browser_search:
                 return SafeTextEntryResult(False, "I will not type because the browser address/search bar appears to be focused.")
             if purpose_key == "message":
                 if _dom_message_composer(dom_info):
@@ -693,6 +698,13 @@ def validate_safe_text_target(purpose: str = "generic", allow_pointer_fallback: 
     if role not in TEXT_ROLES:
         return SafeTextEntryResult(False, "I do not see a text field focused. I will locate and focus the requested field before typing.")
     if _contains_any(label, ADDRESS_LABEL_MARKERS):
+        if allow_browser_search and _matches_name(front_app, BROWSER_APPS) and role in TEXT_ROLES:
+            return SafeTextEntryResult(
+                True,
+                "The user explicitly requested a browser search and the browser text field is focused.",
+                f"{front_app} {role}",
+                safety_path="explicit_browser_search",
+            )
         return SafeTextEntryResult(False, "I will not type because an address/search field appears to be focused.")
 
     if purpose_key == "message":

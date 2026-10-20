@@ -7,6 +7,7 @@ import json
 import logging
 import re
 import time
+import unicodedata
 import uuid
 from dataclasses import asdict, dataclass
 from pathlib import Path
@@ -19,6 +20,75 @@ from actions.screen_control.safety import AbortController, sensitive_file_reason
 from actions.screen_control.schemas import ActionType, ScreenAction
 from actions.screen_control.vision import decide_next_action, describe_screen
 from actions.screen_control.window import bring_to_front
+
+
+_APP_TARGETS = (
+    ("Google Chrome", ("google chrome", "chrome")),
+    ("Microsoft Edge", ("microsoft edge", "edge")),
+    ("Firefox", ("firefox",)),
+    ("Brave Browser", ("brave browser", "brave")),
+    ("Opera", ("opera",)),
+    ("Safari", ("safari",)),
+    ("Spotify", ("spotify",)),
+    ("WhatsApp", ("whatsapp", "whats app")),
+    ("Discord", ("discord",)),
+    ("Telegram", ("telegram",)),
+    ("Slack", ("slack",)),
+    ("Zoom", ("zoom",)),
+    ("Microsoft Teams", ("microsoft teams", "teams")),
+    ("Signal", ("signal",)),
+    ("VLC", ("vlc",)),
+    ("Visual Studio Code", ("visual studio code", "vs code", "vscode")),
+    ("Notion", ("notion",)),
+    ("Obsidian", ("obsidian",)),
+    ("Steam", ("steam",)),
+    ("Epic Games Launcher", ("epic games", "epic")),
+    ("Microsoft Word", ("microsoft word", "word")),
+    ("Microsoft Excel", ("microsoft excel", "excel")),
+    ("Microsoft PowerPoint", ("microsoft powerpoint", "powerpoint")),
+    ("File Explorer", ("file explorer", "explorer")),
+    ("Calculator", ("calculator",)),
+    ("Notepad", ("notepad",)),
+)
+_BROWSER_CUES = ("browser", "web", "internet", "navegador", "google")
+
+
+def _fold_text(value: str) -> str:
+    normalized = unicodedata.normalize("NFKD", str(value or "").casefold())
+    return "".join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
+def infer_window_title(objective: str) -> str:
+    """Infer a common app target when a caller omits `window_title`."""
+    folded = _fold_text(objective)
+    mentions: list[tuple[int, int, str]] = []
+    for title, aliases in _APP_TARGETS:
+        for alias in aliases:
+            match = re.search(rf"(?<![a-z0-9]){re.escape(_fold_text(alias))}(?![a-z0-9])", folded)
+            if match:
+                mentions.append((match.start(), -len(alias), title))
+                break
+    if mentions:
+        return min(mentions)[2]
+
+    # "Search Google/the web/in the browser" is an explicit browser task.
+    # On Windows, Edge is present on standard installations and open_app can
+    # launch it through the Start menu when it is not on PATH.
+    if any(re.search(rf"(?<![a-z0-9]){re.escape(cue)}(?![a-z0-9])", folded) for cue in _BROWSER_CUES):
+        return "Microsoft Edge"
+    return ""
+
+
+def _explicit_browser_search(objective: str, window_title: str, process_name: str) -> bool:
+    if not re.search(
+        r"\b(?:search|searching|look\s+up|google|pesquis(?:e|ar|a|ando)|busc(?:a|ar|e|ando)|procure|procurar)\b",
+        _fold_text(objective),
+    ):
+        return False
+    browser = _fold_text(f"{window_title} {process_name}")
+    return any(name in browser for name in (
+        "chrome", "edge", "firefox", "brave", "opera", "safari", "browser", "navegador",
+    ))
 
 
 @dataclass(frozen=True)
@@ -111,6 +181,7 @@ class ScreenAgent:
 
     def run(self, objective: str, *, window_title: str = "", allow_sensitive_share: bool = False) -> ScreenRunResult:
         goal = " ".join(str(objective or "").split())
+        window_title = str(window_title or "").strip() or infer_window_title(goal)
         run_id = uuid.uuid4().hex[:12]
         if not goal:
             return ScreenRunResult("fail", "Diga o que devo fazer na tela.", 0, run_id)
@@ -174,7 +245,14 @@ class ScreenAgent:
                         run_id,
                     )
 
-                result = execute(decision, capture, mouse_duration=self.config.mouse_move_duration)
+                result = execute(
+                    decision,
+                    capture,
+                    mouse_duration=self.config.mouse_move_duration,
+                    allow_browser_search=_explicit_browser_search(
+                        goal, capture.window.title, capture.window.process_name
+                    ),
+                )
                 time.sleep(self.config.settle_delay)
                 after = capture_active_window(self.config.max_image_side)
                 after_hash = hashlib.sha256(after.image_bytes).hexdigest()

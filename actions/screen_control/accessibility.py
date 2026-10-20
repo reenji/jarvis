@@ -146,13 +146,21 @@ def _find_control(window: WindowInfo, target: str, *, text_only: bool = False):
     return candidates[0][1], "ok"
 
 
-def click_control(window: WindowInfo, target: str) -> tuple[bool, str]:
+def click_control(
+    window: WindowInfo, target: str, *, button: str = "left", double: bool = False,
+) -> tuple[bool, str]:
     control, status = _find_control(window, target)
     if status != "ok":
         return False, status
     try:
-        control.click_input()
-        return True, "UI Automation click"
+        if button == "right":
+            control.right_click_input()
+        elif double:
+            control.double_click_input()
+        else:
+            control.click_input()
+        label = "right click" if button == "right" else "double click" if double else "click"
+        return True, f"UI Automation {label}"
     except Exception as exc:
         return False, f"click_failed:{exc}"
 
