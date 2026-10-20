@@ -101,7 +101,7 @@ def _spotify_macos(action: str, query: str) -> str:
 
         ok, detail = _open_uri(f"spotify:search:{quote(query)}")
         if ok:
-            return f"Opened Spotify results for {query}. Select a result to begin playback."
+            return f"Opened Spotify results for {query}. I will click the matching track to start playback."
         return f"Could not open Spotify search: {detail}"
 
     scripts = {
@@ -238,7 +238,7 @@ def media_control(parameters: dict | None = None, response=None, player=None, se
         if ok:
             if uri:
                 return "Opened the requested item in Spotify."
-            return f"Opened Spotify results for {query}. Select a result to begin playback."
+            return f"Opened Spotify results for {query}. I will click the matching track to start playback."
         return f"Could not open Spotify: {detail}"
 
     if _SYSTEM == "Darwin" and platform_name == "spotify":

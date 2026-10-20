@@ -9,7 +9,7 @@ import time
 import unicodedata
 from pathlib import Path
 
-from actions.safe_text_entry import safe_type_then_enter
+from actions.safe_text_entry import safe_type_text, safe_type_then_enter
 from actions.instagram_browser import (
     prepare_instagram_draft as _controlled_instagram_prepare_draft,
     send_instagram_draft as _controlled_instagram_send_draft,
@@ -909,13 +909,7 @@ def _send_browser_message_via_js(platform_name: str, message: str, url_markers: 
 
 
 def _fill_browser_message_via_js(platform_name: str, message: str, url_markers: tuple[str, ...]) -> str:
-    """Type the message into the verified open chat composer WITHOUT sending.
-
-    Mirrors the composer detection in ``_send_browser_message_via_js`` but
-    stops before clicking any Send button or firing an Enter keypress.
-    Returns a friendly status string on success and an empty string on
-    failure (with ``_browser_focus_error`` populated).
-    """
+    """Type the message into the verified open chat composer without sending."""
     _set_browser_focus_error("")
     dom_js = f"""
 (() => {{
@@ -992,7 +986,7 @@ def _fill_browser_message_via_js(platform_name: str, message: str, url_markers: 
         print(f"[SendMessage] ⚠️ Browser JS fill parse failed: {e}: {result.stdout[:200]}")
         return ""
     if isinstance(data, dict) and data.get("ok"):
-        return f"Draft typed in the open {platform_name} chat. Awaiting your approval to send."
+        return f"Draft typed in the open {platform_name} chat. It has not been sent."
     if isinstance(data, dict):
         _set_browser_focus_error(str(data.get("error") or data.get("reason") or ""))
     return ""
@@ -1155,12 +1149,7 @@ def clear_open_browser_draft(url_markers: tuple[str, ...]) -> bool:
 
 
 def prepare_instagram_draft(receiver: str, message: str) -> str:
-    """Find an Instagram DM, type the draft, and wait for approval.
-
-    This intentionally does not press Send. ``main.py`` uses it for the
-    reply-approval flow so approval can send the already visible draft instead
-    of retyping into whatever field happens to be focused later.
-    """
+    """Find an Instagram DM and type a draft for a follow-up send operation."""
     return _send_instagram(receiver, message)
 
 
@@ -1556,6 +1545,47 @@ def _vision_click(description: str, retries: int = 2, delay: float = 0.6) -> boo
     return True
 
 
+def _visual_chat_send(platform_name: str, receiver: str, message: str) -> str:
+    """Select a visible exact chat, focus its composer, and send the message."""
+    search_targets = {
+        "discord": "Discord's Find or start a conversation search field",
+        "whatsapp": "WhatsApp's search chats field in the left sidebar",
+        "telegram": "Telegram's search chats field above the conversation list",
+        "messenger": "Messenger's search people and conversations field",
+        "signal": "Signal's search conversations field",
+    }
+    platform_key = str(platform_name or "").strip().lower()
+    receiver = str(receiver or "").strip()
+
+    if receiver:
+        search_target = search_targets.get(platform_key, f"{platform_name} conversation search field")
+        if not _vision_click(search_target):
+            if not _open_app(platform_name) or not _vision_click(search_target):
+                return f"Could not locate the {platform_name} conversation search field. Nothing was sent."
+
+        typed_search = safe_type_text(receiver, purpose="generic", clear_first=True)
+        if not typed_search.ok:
+            return f"Could not enter the recipient search in {platform_name}: {typed_search.message} Nothing was sent."
+        time.sleep(0.8)
+        exact_result = f"{platform_name} conversation search result labeled exactly '{receiver}'"
+        if not _vision_click(exact_result):
+            return f"Could not find an exact {platform_name} conversation match for '{receiver}'. Nothing was sent."
+        time.sleep(0.8)
+
+    composer_target = f"{platform_name} message composer at the bottom of the active conversation"
+    if not _vision_click(composer_target):
+        if receiver:
+            return f"Could not locate the selected {platform_name} conversation's message composer. Nothing was sent."
+        if not _open_app(platform_name) or not _vision_click(composer_target):
+            return f"Could not locate the {platform_name} message composer. Nothing was sent."
+
+    typed = safe_type_then_enter(message, purpose="message", allow_pointer_fallback=True)
+    if not typed.ok:
+        return f"Could not send in {platform_name}: {typed.message} Nothing was sent."
+    target = f" to {receiver}" if receiver else " in the open conversation"
+    return f"Message sent{target} via {platform_name}."
+
+
 def _with_argus_footer(text: str) -> str:
     message = normalize_outgoing_message_text(text)
     if ARGUS_TEXT_FOOTER.lower() in message.lower():
@@ -1662,39 +1692,38 @@ def _desktop_send(app_name: str, receiver: str, message: str) -> str:
 
 
 def _send_current_app(receiver: str, message: str) -> str:
-    typed = safe_type_then_enter(message, purpose="message", allow_pointer_fallback=False)
+    if not _vision_click("message composer in the currently open conversation"):
+        return "Could not locate the current conversation's message composer. Nothing was sent."
+    typed = safe_type_then_enter(message, purpose="message", allow_pointer_fallback=True)
     if not typed.ok:
         return typed.message
     target = f" to {receiver}" if receiver else ""
     return f"Message sent{target} in the current app."
 
 def _send_whatsapp(receiver: str, message: str) -> str:
-    if not receiver:
+    if receiver:
+        return _visual_chat_send("WhatsApp", receiver, message)
+    if _get_os() == "mac":
         return _send_open_browser_chat("WhatsApp", message, ("web.whatsapp.com",))
-    result = _send_open_browser_chat("WhatsApp", message, ("web.whatsapp.com",))
-    if "Message sent" in result:
-        return result
-    return _desktop_send("WhatsApp", receiver, message)
+    return _visual_chat_send("WhatsApp", "", message)
 
 def _send_telegram(receiver: str, message: str) -> str:
-    if not receiver:
+    if receiver:
+        return _visual_chat_send("Telegram", receiver, message)
+    if _get_os() == "mac":
         return _send_open_browser_chat("Telegram", message, ("web.telegram.org",))
-    result = _send_open_browser_chat("Telegram", message, ("web.telegram.org",))
-    if "Message sent" in result:
-        return result
-    return _desktop_send("Telegram", receiver, message)
+    return _visual_chat_send("Telegram", "", message)
 
 def _send_signal(receiver: str, message: str) -> str:
-    return _desktop_send("Signal", receiver, message)
+    return _visual_chat_send("Signal", receiver, message)
 
 
 def _send_discord(receiver: str, message: str) -> str:
-    if not receiver:
+    if receiver:
+        return _visual_chat_send("Discord", receiver, message)
+    if _get_os() == "mac":
         return _send_open_browser_chat("Discord", message, ("discord.com/channels", "discord.com/app"))
-    result = _send_open_browser_chat("Discord", message, ("discord.com/channels", "discord.com/app"))
-    if "Message sent" in result:
-        return result
-    return _desktop_send("Discord", receiver, message)
+    return _visual_chat_send("Discord", "", message)
 
 
 def _send_instagram(receiver: str, message: str) -> str:
@@ -1703,19 +1732,18 @@ def _send_instagram(receiver: str, message: str) -> str:
     if duplicate:
         return duplicate
 
-    return _controlled_instagram_prepare_draft(receiver, message)
+    prepared = _controlled_instagram_prepare_draft(receiver, message)
+    if "draft typed" not in str(prepared or "").lower():
+        return prepared
+    return _controlled_instagram_send_draft()
 
 
 def _send_messenger(receiver: str, message: str) -> str:
-    if not receiver:
+    if receiver:
+        return _visual_chat_send("Messenger", receiver, message)
+    if _get_os() == "mac":
         return _send_open_browser_chat("Messenger", message, ("messenger.com",))
-    result = _send_open_browser_chat("Messenger", message, ("messenger.com",))
-    if "Message sent" in result:
-        return result
-    return (
-        "Messenger browser sending is supported for the currently open chat. "
-        "Open the desired Messenger chat in your browser, leave recipient blank, and try again."
-    )
+    return _visual_chat_send("Messenger", "", message)
 
 _PLATFORM_MAP = [
     ({"current", "active", "focused", "frontmost", "any", "generic"}, _send_current_app),
@@ -1775,6 +1803,8 @@ def send_message(
         "messenger", "facebook", "fb",
     }
     recipient_optional = any(keyword in platform_key for keyword in no_recipient_keywords)
+    if receiver.casefold() in {"current", "current chat", "active", "focused", "frontmost"}:
+        receiver = ""
 
     if not receiver and not recipient_optional:
         return "Please specify a recipient."
@@ -1826,7 +1856,7 @@ def prepare_message_reply(
     player=None,
     session_memory=None,
 ) -> str:
-    """Prepare, approve, or cancel a message without losing recipient context."""
+    """Send a user-requested reply, or handle a legacy pending draft."""
     params = parameters or {}
     action = str(params.get("action", "prepare") or "prepare").lower().strip()
 
@@ -1867,25 +1897,11 @@ def prepare_message_reply(
     message_text = str(params.get("message_text", "") or params.get("draft", "") or "").strip()
     platform = str(params.get("platform", "iMessage") or "iMessage").strip()
     if not message_text:
-        return "Please provide the reply text to prepare."
+        return "Please provide the reply text to send."
 
-    platform_key = platform.lower()
-    if _is_instagram_platform(platform_key):
-        prepared_text = _with_argus_footer(message_text)
-        result = prepare_instagram_draft(receiver, prepared_text)
-        if "draft typed" not in result.lower():
-            return result
-        _set_pending_message(platform, receiver, prepared_text)
-    else:
-        _set_pending_message(platform, receiver, message_text)
-
-    payload = {
+    return send_message({
+        "action": "send",
         "platform": platform,
-        "receiver": receiver or "current chat",
-        "message_text": normalize_outgoing_message_text(message_text),
-    }
-    return (
-        "MESSAGE_APPROVAL_REQUIRED|"
-        + json.dumps(payload, separators=(",", ":"))
-        + "\nDraft prepared. Ask the user to approve, revise, or cancel it."
-    )
+        "receiver": receiver,
+        "message_text": message_text,
+    }, player=player, session_memory=session_memory)

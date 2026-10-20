@@ -502,7 +502,7 @@
   },
   {
     "name": "email_control",
-    "description": "Connects Gmail through Google OAuth, checks connection status, reads/searches Gmail, and prepares email. Gmail is the default provider; Apple Mail remains an optional macOS fallback. For Gmail, prepare opens a visible compose window and types To, Cc/Bcc, Subject, and Body in sequence. Every outgoing email is approval-gated: first call action=prepare, then call action=approve only after the user explicitly confirms the exact pending recipient, subject, and body.",
+    "description": "Connects Gmail through Google OAuth, checks connection status, reads/searches Gmail, prepares drafts, and sends email. Gmail is the default provider; Apple Mail remains an optional macOS fallback. For Gmail, send opens a visible compose window, types and verifies To, Cc/Bcc, Subject, and Body, then sends directly when the user has asked to send. Use action=prepare only to create an unsent draft.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -517,6 +517,7 @@
             "search",
             "read",
             "prepare",
+            "send",
             "approve",
             "cancel"
           ],
@@ -565,11 +566,11 @@
         },
         "subject": {
           "type": "STRING",
-          "description": "Exact email subject for prepare."
+          "description": "Exact email subject for send/prepare."
         },
         "body": {
           "type": "STRING",
-          "description": "Exact email body for prepare."
+          "description": "Exact email body for send/prepare."
         }
       },
       "required": [
@@ -848,7 +849,7 @@
   },
   {
     "name": "media_control",
-    "description": "Controls music playback, primarily Spotify. Use when the user asks to play, resume, pause, stop, toggle, skip, or go back in Spotify, Apple Music, YouTube Music, or the active media player. Spotify is the default platform. Pass a song, artist, album, playlist, or Spotify link in query.",
+    "description": "Controls music playback, primarily Spotify. Use when the user asks to play, resume, pause, stop, toggle, skip, or go back in Spotify, Apple Music, YouTube Music, or the active media player. Spotify is the default platform. Pass a song, artist, album, playlist, or Spotify link in query. When a plain Spotify search opens results, immediately use computer_control screen_click to select the matching visible track; do not ask the user to choose it.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -903,7 +904,7 @@
   },
   {
     "name": "prepare_message_reply",
-    "description": "Creates an approval-gated message draft, approves the current pending draft, or cancels it. Never approve unless the user explicitly confirms the exact pending draft.",
+    "description": "Sends a concise reply the user asked ARGUS to write. Use directly; no second approval is needed. Clarify only a genuinely ambiguous recipient or meaning. Legacy approve/cancel actions operate on an existing pending draft.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -914,7 +915,7 @@
             "approve",
             "cancel"
           ],
-          "description": "Draft lifecycle action."
+          "description": "prepare sends the requested reply immediately; approve/cancel handles a legacy pending draft."
         },
         "platform": {
           "type": "STRING",
@@ -926,7 +927,7 @@
         },
         "message_text": {
           "type": "STRING",
-          "description": "Exact draft text, required for prepare."
+          "description": "Reply text to send."
         }
       },
       "required": [
@@ -1008,7 +1009,7 @@
   },
   {
     "name": "send_message",
-    "description": "Sends a user-authored message through iMessage, WhatsApp, Telegram, Instagram, Discord, or the current chat. For Instagram, the first call prepares a visible draft; use action=approve only after explicit user confirmation.",
+    "description": "Sends a user-authorized message through iMessage, WhatsApp, Telegram, Instagram, Discord, Messenger, Signal, or the current chat. Send directly after the user asks; do not ask for approval. Resolve the requested recipient and focus the correct message composer before typing. For Instagram, verify the visible recipient and draft, then send during this call.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -1019,19 +1020,19 @@
             "approve",
             "cancel"
           ],
-          "description": "Default: send. Approve/cancel operates on the pending draft."
+          "description": "Default: send. Sends immediately when requested; approve/cancel handles a legacy pending draft."
         },
         "receiver": {
           "type": "STRING",
-          "description": "Recipient contact name. Optional for current/focused chats and approval actions."
+          "description": "Recipient contact name. Leave empty for the currently open chat."
         },
         "message_text": {
           "type": "STRING",
-          "description": "Exact message content. Required for send."
+          "description": "Message content to send."
         },
         "platform": {
           "type": "STRING",
-          "description": "iMessage, WhatsApp, Telegram, Instagram, Discord, or current/focused."
+          "description": "iMessage, WhatsApp, Telegram, Instagram, Discord, Messenger, Signal, or current/focused."
         }
       },
       "required": [
