@@ -734,7 +734,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "computer_control",
-        "description": "Direct computer control: type, click, hotkeys, scroll, move mouse, screenshots, find elements on screen. When the direct-control setting is off, every mutating action requires a separate explicit user confirmation; repeat the unchanged call only after confirmation. Screenshot, screen_find, and wait are observational actions.",
+        "description": "Direct computer control: type, click, hotkeys, scroll, move mouse, screenshots, find elements on screen. When a requested text field is not focused, locate and click the visible field before typing; do not ask the user to click when the target is clear. When the direct-control setting is off, every mutating action requires a separate explicit user confirmation; repeat the unchanged call only after confirmation. Screenshot, screen_find, and wait are observational actions.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
