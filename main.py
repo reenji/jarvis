@@ -411,9 +411,8 @@ TOOL_DECLARATIONS = [
     {
         "name": "open_app",
         "description": (
-            "Opens any application on the computer. "
-            "Use this whenever the user asks to open, launch, or start any app, "
-            "website, or program. Always call this tool — never just say you opened it."
+            "Opens an application when that is the whole request. "
+            "When the user asks to complete a task inside an app, use screen_control so ARGUS opens/focuses the app and performs the complete task."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -428,7 +427,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "web_search",
-        "description": "Searches the web for any information.",
+        "description": "Searches the web for current or requested online information. Prefer this over opening a browser for ordinary research; it uses Gemini Google Search grounding and a DDG fallback.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -645,19 +644,19 @@ TOOL_DECLARATIONS = [
     {
         "name": "browser_control",
         "description": (
-            "Controls any web browser. Use for: opening websites, searching the web, "
-            "clicking elements, filling forms, scrolling, screenshots, navigation, any web-based task. "
-            "Always pass the 'browser' parameter when the user specifies a browser (e.g. 'open in Edge', "
-            "'use Firefox', 'open Chrome'). Multiple browsers can run simultaneously."
+            "Controls a browser session for explicit browser tasks; use web_search for ordinary research and "
+            "screen_control for a visible browser window. If the requested browser is unavailable, use an installed one. "
+            "When the browser is already running, ARGUS uses its own profile to avoid locking the active session; "
+            "when it is closed, ARGUS can use its saved profile."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "action":      {"type": "STRING", "description": "go_to | search | click | type | scroll | fill_form | smart_click | smart_type | get_text | get_url | press | new_tab | close_tab | screenshot | back | forward | reload | switch | list_browsers | close | close_all"},
-                "browser":     {"type": "STRING", "description": "Target browser: chrome | edge | firefox | opera | operagx | brave | vivaldi | safari. Omit to use the currently active browser."},
+                "browser":     {"type": "STRING", "description": "Target browser: chrome | edge | firefox | opera | operagx | brave | vivaldi | safari. Omit to use the active ARGUS session or installed system default."},
                 "url":         {"type": "STRING", "description": "URL for go_to / new_tab action"},
                 "query":       {"type": "STRING", "description": "Search query for search action"},
-                "engine":      {"type": "STRING", "description": "Search engine: google | bing | duckduckgo | yandex (default: google)"},
+                "engine":      {"type": "STRING", "description": "Search engine: duckduckgo (default) | google | bing | yandex"},
                 "selector":    {"type": "STRING", "description": "CSS selector for click/type"},
                 "text":        {"type": "STRING", "description": "Text to click or type"},
                 "description": {"type": "STRING", "description": "Element description for smart_click/smart_type"},

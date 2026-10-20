@@ -38,30 +38,51 @@ def _get_api_key() -> str:
 
 def _gemini_search(query: str) -> str:
     from google import genai
+    from google.genai import types
 
-    client   = genai.Client(api_key=_get_api_key())
+    client   = genai.Client(
+        api_key=_get_api_key(),
+        http_options=types.HttpOptions(timeout=25_000),
+    )
     response = client.models.generate_content(
-        model="gemini-2.5-flash",
+        model=os.environ.get("ARGUS_WEB_SEARCH_MODEL", "gemini-3.8-flash").strip() or "gemini-3.8-flash",
         contents=query,
-        config={"tools": [{"google_search": {}}]},
+        config=types.GenerateContentConfig(
+            tools=[types.Tool(google_search=types.GoogleSearch())],
+        ),
     )
 
-    text = ""
-    for part in response.candidates[0].content.parts:
-        if hasattr(part, "text") and part.text:
-            text += part.text
-
-    text = text.strip()
+    text = str(getattr(response, "text", "") or "").strip()
+    candidates = getattr(response, "candidates", None) or []
+    if not text and candidates:
+        parts = getattr(getattr(candidates[0], "content", None), "parts", None) or []
+        text = "\n".join(
+            str(part.text).strip()
+            for part in parts
+            if getattr(part, "text", None)
+        ).strip()
     if not text:
         raise ValueError("Gemini returned an empty response.")
+
+    # Google grounding supplies source links separately from the answer text.
+    sources: list[tuple[str, str]] = []
+    if candidates:
+        metadata = getattr(candidates[0], "grounding_metadata", None)
+        for chunk in getattr(metadata, "grounding_chunks", None) or []:
+            web = getattr(chunk, "web", None)
+            uri = str(getattr(web, "uri", "") or "").strip()
+            title = str(getattr(web, "title", "") or uri).strip()
+            if uri and all(uri != existing_uri for _, existing_uri in sources):
+                sources.append((title, uri))
+    if sources:
+        text += "\n\nFontes consultadas:\n" + "\n".join(
+            f"- {title}: {uri}" for title, uri in sources[:8]
+        )
     return text
 
 
 def _ddg_search(query: str, max_results: int = 6) -> list[dict]:
-    try:
-        from ddgs import DDGS
-    except ImportError:
-        from duckduckgo_search import DDGS
+    from ddgs import DDGS
 
     results = []
     with DDGS() as ddgs:
@@ -76,7 +97,7 @@ def _ddg_search(query: str, max_results: int = 6) -> list[dict]:
 
 def _format_ddg(query: str, results: list[dict]) -> str:
     if not results:
-        return f"No results found for: {query}"
+        return f"Não consegui recuperar resultados online para: {query}"
 
     lines = [f"Search results for: {query}\n"]
     for i, r in enumerate(results, 1):
@@ -111,6 +132,8 @@ def _compare(items: list[str], aspect: str) -> str:
         for r in all_results.get(item, [])[:2]:
             if r.get("snippet"):
                 lines.append(f"  • {r['snippet']}")
+    if not any(all_results.values()):
+        return "Não consegui obter resultados para comparar. A busca Gemini falhou e o provedor DDG não retornou resultados."
     return "\n".join(lines)
 
 def web_search(
@@ -153,8 +176,13 @@ def web_search(
             results = _ddg_search(query)
             result  = _format_ddg(query, results)
             print(f"[WebSearch] ✅ DDG: {len(results)} result(s).")
+            if not results:
+                return (
+                    f"Não consegui pesquisar '{query}': o Gemini Search falhou e o DDG não retornou resultados. "
+                    "Verifique a conexão e a configuração da chave Gemini."
+                )
             return result
 
     except Exception as e:
         print(f"[WebSearch] ❌ All backends failed: {e}")
-        return f"Search failed, sir: {e}"
+        return f"A pesquisa falhou: {e}"

@@ -97,6 +97,12 @@ def bring_to_front(title_or_process: str) -> bool:
             aliases = {
                 "google chrome": {"chrome"},
                 "microsoft edge": {"msedge", "edge"},
+                "brave browser": {"brave"},
+                "mozilla firefox": {"firefox"},
+                "firefox": {"firefox"},
+                "opera": {"opera"},
+                "opera gx": {"opera"},
+                "vivaldi": {"vivaldi"},
                 "visual studio code": {"code"},
                 "microsoft teams": {"teams", "msteams"},
                 "file explorer": {"explorer"},

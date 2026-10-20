@@ -18,6 +18,9 @@ _APP_ALIASES: dict[str, dict[str, str]] = {
 
     "chrome":             {"Windows": "chrome",                  "Darwin": "Google Chrome",        "Linux": "google-chrome"},
     "google chrome":      {"Windows": "chrome",                  "Darwin": "Google Chrome",        "Linux": "google-chrome"},
+    "browser":            {"Windows": "chrome",                  "Darwin": "Google Chrome",        "Linux": "google-chrome"},
+    "default browser":    {"Windows": "chrome",                  "Darwin": "Google Chrome",        "Linux": "google-chrome"},
+    "navegador":          {"Windows": "chrome",                  "Darwin": "Google Chrome",        "Linux": "google-chrome"},
     "firefox":            {"Windows": "firefox",                 "Darwin": "Firefox",              "Linux": "firefox"},
     "edge":               {"Windows": "msedge",                  "Darwin": "Microsoft Edge",       "Linux": "microsoft-edge"},
     "brave":              {"Windows": "brave",                   "Darwin": "Brave Browser",        "Linux": "brave-browser"},
@@ -49,13 +52,17 @@ _APP_ALIASES: dict[str, dict[str, str]] = {
     "powerpoint":         {"Windows": "powerpnt",                "Darwin": "Microsoft PowerPoint", "Linux": "libreoffice --impress"},
     "libreoffice":        {"Windows": "soffice",                 "Darwin": "LibreOffice",          "Linux": "libreoffice"},
     "notepad":            {"Windows": "notepad.exe",             "Darwin": "TextEdit",             "Linux": "gedit"},
+    "bloco de notas":     {"Windows": "notepad.exe",             "Darwin": "TextEdit",             "Linux": "gedit"},
     "textedit":           {"Windows": "notepad.exe",             "Darwin": "TextEdit",             "Linux": "gedit"},
     "explorer":           {"Windows": "explorer.exe",            "Darwin": "Finder",               "Linux": "nautilus"},
     "file explorer":      {"Windows": "explorer.exe",            "Darwin": "Finder",               "Linux": "nautilus"},
+    "explorador de arquivos": {"Windows": "explorer.exe",         "Darwin": "Finder",               "Linux": "nautilus"},
+    "gerenciador de arquivos": {"Windows": "explorer.exe",        "Darwin": "Finder",               "Linux": "nautilus"},
     "finder":             {"Windows": "explorer.exe",            "Darwin": "Finder",               "Linux": "nautilus"},
     "task manager":       {"Windows": "taskmgr.exe",             "Darwin": "Activity Monitor",     "Linux": "gnome-system-monitor"},
     "settings":           {"Windows": "ms-settings:",            "Darwin": "System Preferences",   "Linux": "gnome-control-center"},
     "calculator":         {"Windows": "calc.exe",                "Darwin": "Calculator",           "Linux": "gnome-calculator"},
+    "calculadora":        {"Windows": "calc.exe",                "Darwin": "Calculator",           "Linux": "gnome-calculator"},
     "paint":              {"Windows": "mspaint.exe",             "Darwin": "Preview",              "Linux": "gimp"},
     "instagram":          {"Windows": "Instagram",               "Darwin": "Instagram",            "Linux": "firefox"},
     "tiktok":             {"Windows": "TikTok",                  "Darwin": "TikTok",               "Linux": "firefox"},
@@ -70,12 +77,20 @@ _APP_ALIASES: dict[str, dict[str, str]] = {
 
 def _normalize(raw: str) -> str:
     cleaned = re.sub(
-        r"^(?:please\s+)?(?:open|launch|start|run)\s+",
+        r"^(?:(?:please|por favor)\s+)?(?:open|launch|start|run|abrir|abra|abre|iniciar|inicie|executar|execute)\s+",
         "",
         str(raw or "").strip(),
         flags=re.IGNORECASE,
     )
     key = cleaned.lower().strip()
+
+    if key in {"browser", "default browser", "navegador", "meu navegador"}:
+        try:
+            from actions.browser_defaults import detect_default_browser
+            browser = detect_default_browser()
+            return _APP_ALIASES.get(browser, {}).get(_SYSTEM, raw)
+        except Exception:
+            pass
 
     # Keep the recognized application name readable here; open_app resolves
     # this canonical name back to the same platform-specific launch target.

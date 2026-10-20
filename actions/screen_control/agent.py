@@ -46,9 +46,9 @@ _APP_TARGETS = (
     ("Microsoft Word", ("microsoft word", "word")),
     ("Microsoft Excel", ("microsoft excel", "excel")),
     ("Microsoft PowerPoint", ("microsoft powerpoint", "powerpoint")),
-    ("File Explorer", ("file explorer", "explorer")),
-    ("Calculator", ("calculator",)),
-    ("Notepad", ("notepad",)),
+    ("File Explorer", ("file explorer", "explorer", "explorador de arquivos", "gerenciador de arquivos")),
+    ("Calculator", ("calculator", "calculadora")),
+    ("Notepad", ("notepad", "bloco de notas")),
 )
 _BROWSER_CUES = ("browser", "web", "internet", "navegador", "google")
 
@@ -69,19 +69,28 @@ def infer_window_title(objective: str) -> str:
                 mentions.append((match.start(), -len(alias), title))
                 break
     if mentions:
-        return min(mentions)[2]
+        title = min(mentions)[2]
+        if title in {"Google Chrome", "Microsoft Edge", "Firefox", "Brave Browser", "Opera", "Safari"}:
+            try:
+                from actions.browser_control import browser_window_title
+                return browser_window_title(title)
+            except Exception:
+                pass
+        return title
 
-    # "Search Google/the web/in the browser" is an explicit browser task.
-    # On Windows, Edge is present on standard installations and open_app can
-    # launch it through the Start menu when it is not on PATH.
+    # Generic browser requests use the installed system default, not a hard-coded browser.
     if any(re.search(rf"(?<![a-z0-9]){re.escape(cue)}(?![a-z0-9])", folded) for cue in _BROWSER_CUES):
-        return "Microsoft Edge"
+        try:
+            from actions.browser_control import browser_window_title
+            return browser_window_title()
+        except Exception:
+            return "Microsoft Edge"
     return ""
 
 
 def _explicit_browser_search(objective: str, window_title: str, process_name: str) -> bool:
     if not re.search(
-        r"\b(?:search|searching|look\s+up|google|pesquis(?:e|ar|a|ando)|busc(?:a|ar|e|ando)|procure|procurar)\b",
+        r"\b(?:search|searching|look\s+up|google|pesquis(?:e|ar|a|ando)|busc(?:a|ar|e|ando)|busque|procure|procurar)\b",
         _fold_text(objective),
     ):
         return False

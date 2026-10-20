@@ -38,16 +38,26 @@ def _type_text(
     focus_detail = ""
     if target:
         focused, focus_detail = focus_text_control(window, target)
+    visually_selected = focused
     if not focused and x is not None and y is not None:
         abs_x, abs_y = to_absolute(x, y, capture)
         if not _inside_capture(abs_x, abs_y, capture):
             raise RuntimeError("O campo de texto indicado está fora da janela em foco.")
         pyautogui.click(abs_x, abs_y)
         time.sleep(0.12)
+        visually_selected = True
 
-    # Only paste after the operating system confirms that a text control has focus.
+    # Prefer OS accessibility; use the screen-selected target only inside the verified window.
     from actions.safe_text_entry import validate_safe_text_target
-    validation = validate_safe_text_target("generic", allow_browser_search=allow_browser_search)
+    validation = validate_safe_text_target(
+        "generic",
+        allow_browser_search=allow_browser_search,
+        allow_visual_target=visually_selected,
+        allow_unsafe_app=True,
+        visual_target=target or (f"visible text field at {x},{y}" if visually_selected else ""),
+        expected_app=window.title,
+        expected_process=window.process_name,
+    )
     if not validation.ok:
         raise RuntimeError(validation.message)
 
@@ -63,7 +73,15 @@ def _type_text(
         return "Texto colado em campo de texto verificado."
     except ImportError:
         from actions.safe_text_entry import safe_type_text
-        typed = safe_type_text(text, purpose="generic")
+        typed = safe_type_text(
+            text,
+            purpose="generic",
+            allow_visual_target=visually_selected,
+            allow_unsafe_app=True,
+            visual_target=target or (f"visible text field at {x},{y}" if visually_selected else ""),
+            expected_app=window.title,
+            expected_process=window.process_name,
+        )
         if not typed.ok:
             raise RuntimeError(typed.message)
         return typed.message
