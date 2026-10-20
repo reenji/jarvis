@@ -49,6 +49,10 @@ O controle direto do mouse e do teclado fica ativado por padrão para que o ARGU
 conclua ações solicitadas sem pedir confirmação para cada clique ou tecla. Ele
 pode ser desativado em **Configurações → Ações**. Leia os [termos de controle do computador](docs/TERMS.md).
 
+O ARGUS pode abrir aplicativos pelo nome e executar tarefas visuais neles. Em
+pedidos com vários passos, ele abre ou foca o aplicativo, interage com seus
+controles e verifica o resultado; veja a [comparação com OpenJarvis](docs/OPENJARVIS_COMPARISON.md).
+
 ## Local document knowledge
 
 ARGUS can index a specific document or folder you name, then search it with

@@ -102,6 +102,42 @@ def test_screen_agent_verifies_success_after_two_observations():
     assert "Mike" in result.summary
 
 
+def test_screen_agent_launches_named_app_then_focuses_before_interacting():
+    capture = _capture()
+    agent = ScreenAgent(
+        config=ScreenConfig(max_steps=2, max_seconds=10, settle_delay=0.1),
+        abort_controller=_NoopAbort(),
+    )
+    done = ScreenAction(ActionType.DONE, summary="A tarefa no Spotify foi concluída.")
+    with (
+        patch("actions.screen_control.agent.bring_to_front", side_effect=[False, False, True]) as focus,
+        patch("actions.open_app.open_app", return_value="Opened Spotify.") as launch,
+        patch("actions.screen_control.agent.time.sleep"),
+        patch("actions.screen_control.agent.capture_active_window", return_value=capture),
+        patch("actions.screen_control.agent.describe_controls", return_value=[]),
+        patch("actions.screen_control.agent.decide_next_action", return_value=done),
+    ):
+        result = agent.run("Reproduza a faixa solicitada", window_title="Spotify")
+
+    assert result.status == "success"
+    launch.assert_called_once_with({"app_name": "Spotify"})
+    assert focus.call_count == 3
+
+
+def test_screen_agent_does_not_act_on_wrong_window_if_requested_app_cannot_open():
+    agent = ScreenAgent(abort_controller=_NoopAbort())
+    with (
+        patch("actions.screen_control.agent.bring_to_front", return_value=False),
+        patch("actions.open_app.open_app", return_value="Could not confirm that Spotify launched."),
+        patch("actions.screen_control.agent.capture_active_window") as capture,
+    ):
+        result = agent.run("Reproduza a faixa solicitada", window_title="Spotify")
+
+    assert result.status == "fail"
+    assert "abrir e focar" in result.summary
+    capture.assert_not_called()
+
+
 def test_screen_agent_stops_repeating_an_unchanged_click():
     capture = _capture()
     agent = ScreenAgent(

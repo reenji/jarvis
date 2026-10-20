@@ -580,9 +580,10 @@ TOOL_DECLARATIONS = [
         "description": (
             "Controls music playback, primarily Spotify. Use when the user asks to play, resume, pause, "
             "stop, toggle, skip, or go back in Spotify, Apple Music, YouTube Music, or the active media player. "
-            "Spotify is the default platform. Pass a song, artist, album, playlist, or Spotify link in query. "
-            "When a plain Spotify search opens results, immediately use computer_control screen_click to select "
-            "the matching visible track; do not ask the user to choose it."
+            "Spotify is the default platform. Pass the requested song, artist, album, playlist, or Spotify link in query. "
+            "On Windows, a plain Spotify search opens the app, selects a matching visible result, and verifies playback "
+            "in this call; do not ask the user to select a track or call another screen tool. "
+            "If a match is ambiguous or cannot be verified, report that specific issue."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -1905,7 +1906,7 @@ class ArgusLive:
             "computer_settings", "computer_control", "desktop_control", "file_controller",
             "file_processor", "code_helper", "dev_agent", "game_updater",
             "create_presentation", "save_memory", "argus_ui_control", "graphics_quality",
-            "local_knowledge",
+            "local_knowledge", "open_app", "screen_control", "media_control",
         }
         call_list = list(calls or [])
         if any(getattr(call, "name", "") in mutating for call in call_list):

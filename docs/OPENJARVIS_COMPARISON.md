@@ -11,7 +11,7 @@ avaliação de eficiência e melhoria baseada em rastros locais.
 | Área | ARGUS | OpenJarvis |
 | --- | --- | --- |
 | Voz e interface | Conversa por voz em tempo real, interface desktop PyQt e painel web hospedado. | CLI, GUI/web e agentes; presets incluem experiências de chat e briefing falado. |
-| Ações desktop | Controle visual e de acessibilidade, navegador, arquivos, mídia, e-mail e mensagens. | Ferramentas e agentes configuráveis; o foco não é automação visual do desktop do usuário. |
+| Ações desktop | Abre aplicativos e controla janelas, mouse e teclado; para tarefas visuais usa acessibilidade e visão e verifica as ações. | Não tem ferramenta integrada para ver a tela, mover o mouse ou enviar teclas; tem chat desktop/web e automação de páginas no navegador. |
 | Pesquisa | Pesquisa web e relatório de deep research; processa arquivos enviados/abertos. | Pesquisa multi-etapas na web e em documentos locais indexados, com citações. |
 | Memória e automação | Memória de preferências, fila de tarefas, lembretes e algumas rotinas específicas. | Agentes sob demanda, agendados e contínuos, com memória persistente e monitoramento. |
 | Skills | Inventário de ferramentas integrado e plugins Python locais. | Catálogo de skills reutilizáveis, instalação de fontes públicas, descoberta e avaliação. |
@@ -21,7 +21,28 @@ avaliação de eficiência e melhoria baseada em rastros locais.
 As descrições do OpenJarvis vêm do [README do projeto](https://github.com/open-jarvis/OpenJarvis),
 do [guia de skills](https://open-jarvis.github.io/OpenJarvis/user-guide/skills/),
 da [documentação de deep research](https://open-jarvis.github.io/OpenJarvis/user-guide/deep-research/)
-e do [guia de benchmarks](https://open-jarvis.github.io/OpenJarvis/user-guide/benchmarks/).
+e do [guia de benchmarks](https://open-jarvis.github.io/OpenJarvis/user-guide/benchmarks/)
+e da seção [System Access](https://open-jarvis.github.io/OpenJarvis/user-guide/system-access/),
+que esclarece a ausência de computer use.
+
+## A função principal do ARGUS: abrir e operar aplicativos
+
+Esse é um diferencial central do ARGUS, e não uma lacuna em relação ao
+OpenJarvis. O ARGUS já inclui `open_app`, controles do sistema e uma ferramenta
+de tela que combina acessibilidade do Windows com localização visual e confirma
+o resultado após cada ação. O OpenJarvis oferece uma interface desktop para
+conversar com o agente; sua documentação diz explicitamente que ele não vê a
+tela nem controla mouse/teclado. Ele pode abrir aplicativos por comandos de
+shell configurados pelo usuário, mas isso não equivale ao agente visual de
+desktop do ARGUS.
+
+O ajuste necessário no ARGUS era a orquestração: a instrução de reprodução no
+Spotify mandava chamar uma segunda ferramenta, e ações de abrir/focar apps podiam
+ser executadas em paralelo. Esta PR muda o fluxo para abrir ou focar o app antes
+da interação, serializa ações desktop dentro de uma mesma rodada e, no Windows,
+faz a busca, seleção visual da faixa e verificação de reprodução em uma chamada.
+Assim, ARGUS avança precisamente na função de abrir e operar aplicativos, área
+em que já tem uma capacidade que o OpenJarvis não oferece nativamente.
 
 ## Lacunas encontradas no ARGUS
 
@@ -39,6 +60,8 @@ e do [guia de benchmarks](https://open-jarvis.github.io/OpenJarvis/user-guide/be
 - Tipos aceitos incluem texto, Markdown, código, JSON/CSV, PDF, DOCX e PPTX. Arquivos ocultos, pastas de dependências, nomes de configuração sensível e arquivos cujo conteúdo parece conter credenciais são ignorados.
 - A busca devolve pequenos excertos com caminho e linhas, para a resposta poder citar as fontes. O índice fica no computador, mas os excertos recuperados são enviados ao modelo ativo (Gemini no fluxo atual).
 - Remover apaga apenas entradas do índice e nunca os arquivos de origem. O conteúdo dos documentos é tratado como dado não confiável, não como instrução.
+- Para tarefas visuais em aplicativos, `window_title` agora pode nomear um app fechado: ARGUS o abre, espera pela janela e a foca antes de agir. A reprodução por busca textual no Spotify faz essa cadeia automaticamente no Windows.
+- Chamadas de abrir app, controlar tela e mídia são executadas em sequência para evitar corrida entre abrir o aplicativo e tentar clicar nele.
 
 ## Próximos passos sugeridos
 

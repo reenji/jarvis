@@ -288,6 +288,31 @@ class QAModeSafetyTests(unittest.TestCase):
         self.assertEqual(results, ["send_message", "computer_settings"])
         self.assertGreaterEqual(elapsed, 0.07)
 
+    def test_app_launch_precedes_screen_interaction_in_same_tool_batch(self):
+        import main
+
+        argus = main.ArgusLive.__new__(main.ArgusLive)
+        events = []
+
+        async def execute(call):
+            events.append(("start", call.name))
+            await asyncio.sleep(0.01)
+            events.append(("end", call.name))
+            return call.name
+
+        argus._execute_tool = AsyncMock(side_effect=execute)
+        calls = [
+            SimpleNamespace(name="open_app"),
+            SimpleNamespace(name="screen_control"),
+        ]
+        results = asyncio.run(argus._execute_tool_batch(calls))
+
+        self.assertEqual(results, ["open_app", "screen_control"])
+        self.assertEqual(events, [
+            ("start", "open_app"), ("end", "open_app"),
+            ("start", "screen_control"), ("end", "screen_control"),
+        ])
+
     def test_live_config_uses_fast_end_of_speech_detection(self):
         import main
 
