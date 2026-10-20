@@ -67,7 +67,7 @@
   },
   {
     "name": "browser_control",
-    "description": "Controls any web browser. Use for: opening websites, searching the web, clicking elements, filling forms, scrolling, screenshots, navigation, any web-based task. Always pass the 'browser' parameter when the user specifies a browser (e.g. 'open in Edge', 'use Firefox', 'open Chrome'). Multiple browsers can run simultaneously.",
+    "description": "Controls a browser session for explicit browser tasks. Use web_search for ordinary internet research. Use screen_control when the user asks to operate a browser window visible on the desktop. If a requested browser is unavailable, it selects an installed browser. When that browser is already running, ARGUS uses its own profile to avoid locking the user's active session; when it is closed, ARGUS can use its saved profile.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -77,7 +77,7 @@
         },
         "browser": {
           "type": "STRING",
-          "description": "Target browser: chrome | edge | firefox | opera | operagx | brave | vivaldi | safari. Omit to use the currently active browser."
+          "description": "Target browser: chrome | edge | firefox | opera | operagx | brave | vivaldi | safari. Omit to use the active ARGUS session or installed system default."
         },
         "url": {
           "type": "STRING",
@@ -89,7 +89,7 @@
         },
         "engine": {
           "type": "STRING",
-          "description": "Search engine: google | bing | duckduckgo | yandex (default: google)"
+          "description": "Search engine: duckduckgo (default) | google | bing | yandex"
         },
         "selector": {
           "type": "STRING",

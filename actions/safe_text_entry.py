@@ -663,7 +663,9 @@ def _pointer_message_target() -> SafeTextEntryResult:
 
 def validate_safe_text_target(
     purpose: str = "generic", allow_pointer_fallback: bool = False,
-    allow_browser_search: bool = False,
+    allow_browser_search: bool = False, allow_visual_target: bool = False,
+    allow_unsafe_app: bool = False,
+    visual_target: str = "", expected_app: str = "", expected_process: str = "",
 ) -> SafeTextEntryResult:
     purpose_key = str(purpose or "generic").lower().strip()
     os_name = _actual_os()
@@ -689,13 +691,47 @@ def validate_safe_text_target(
     role = str(ax.get("role", "")).strip()
     label = " ".join(str(ax.get(k, "")) for k in ("title", "description", "value", "role", "subrole"))
 
+    def visual_fallback() -> SafeTextEntryResult | None:
+        if not allow_visual_target or not str(visual_target or "").strip():
+            return None
+        process = str(expected_process or "").casefold()
+        app = front_app or WINDOWS_APP_NAMES.get(process) or expected_app or process
+        if not app or (_is_unsafe_typing_app(app) and not allow_unsafe_app):
+            return None
+        aliases = {
+            "bravebrowser": "brave", "googlechrome": "chrome",
+            "microsoftedge": "msedge", "visualstudiocode": "code",
+            "microsoftteams": "msteams",
+        }
+        expected_stem = str(expected_process or "").casefold().removesuffix(".exe").replace(" ", "")
+        app_stem = app.casefold().removesuffix(".exe").replace(" ", "")
+        expected_stem = aliases.get(expected_stem, expected_stem)
+        app_stem = aliases.get(app_stem, app_stem)
+        if expected_stem and app_stem and expected_stem != app_stem:
+            return None
+        target_text = f"{visual_target} {label}"
+        if _contains_any(target_text, ADDRESS_LABEL_MARKERS) and not allow_browser_search:
+            return SafeTextEntryResult(False, "I will not type into a browser address/search field unless the user explicitly asked to search there.")
+        return SafeTextEntryResult(
+            True,
+            "The requested text target was selected in the verified visible window.",
+            f"{app}: {visual_target}",
+            safety_path="screen_verified_target",
+        )
+
     if not front_app or not role:
+        fallback = visual_fallback()
+        if fallback:
+            return fallback
         if purpose_key == "message" and allow_pointer_fallback:
             return _pointer_message_target()
         return SafeTextEntryResult(False, "I cannot verify a focused text field. I will locate and focus the requested field before typing.")
-    if _is_unsafe_typing_app(front_app):
+    if _is_unsafe_typing_app(front_app) and not allow_unsafe_app:
         return SafeTextEntryResult(False, f"I will not type into {front_app}; that app is blocked for safety.")
     if role not in TEXT_ROLES:
+        fallback = visual_fallback()
+        if fallback:
+            return fallback
         return SafeTextEntryResult(False, "I do not see a text field focused. I will locate and focus the requested field before typing.")
     if _contains_any(label, ADDRESS_LABEL_MARKERS):
         if allow_browser_search and _matches_name(front_app, BROWSER_APPS) and role in TEXT_ROLES:
@@ -735,10 +771,23 @@ def safe_type_text(
     press_enter: bool = False,
     clear_first: bool = False,
     allow_pointer_fallback: bool = False,
+    allow_visual_target: bool = False,
+    allow_unsafe_app: bool = False,
+    visual_target: str = "",
+    expected_app: str = "",
+    expected_process: str = "",
     interval: float = VISIBLE_TYPING_INTERVAL_SECONDS,
 ) -> SafeTextEntryResult:
     _require_pyautogui()
-    validation = validate_safe_text_target(purpose, allow_pointer_fallback=allow_pointer_fallback)
+    validation = validate_safe_text_target(
+        purpose,
+        allow_pointer_fallback=allow_pointer_fallback,
+        allow_visual_target=allow_visual_target,
+        allow_unsafe_app=allow_unsafe_app,
+        visual_target=visual_target,
+        expected_app=expected_app,
+        expected_process=expected_process,
+    )
     if not validation.ok:
         print(
             f"[SafeTextEntry] refused purpose={purpose} "

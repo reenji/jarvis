@@ -11,7 +11,7 @@ avaliação de eficiência e melhoria baseada em rastros locais.
 | Área | ARGUS | OpenJarvis |
 | --- | --- | --- |
 | Voz e interface | Conversa por voz em tempo real, interface desktop PyQt e painel web hospedado. | CLI, GUI/web e agentes; presets incluem experiências de chat e briefing falado. |
-| Ações desktop | Abre aplicativos e controla janelas, mouse e teclado; para tarefas visuais usa acessibilidade e visão e verifica as ações. | Não tem ferramenta integrada para ver a tela, mover o mouse ou enviar teclas; tem chat desktop/web e automação de páginas no navegador. |
+| Ações desktop | Abre aplicativos e controla janelas, mouse e teclado; para tarefas visuais usa acessibilidade e visão e verifica as ações. | Não tem ferramenta documentada para ver a área de trabalho ou enviar cliques/teclas globais; o exemplo Browser Assistant controla páginas web com ferramentas de navegador. |
 | Pesquisa | Pesquisa web e relatório de deep research; processa arquivos enviados/abertos. | Pesquisa multi-etapas na web e em documentos locais indexados, com citações. |
 | Memória e automação | Memória de preferências, fila de tarefas, lembretes e algumas rotinas específicas. | Agentes sob demanda, agendados e contínuos, com memória persistente e monitoramento. |
 | Skills | Inventário de ferramentas integrado e plugins Python locais. | Catálogo de skills reutilizáveis, instalação de fontes públicas, descoberta e avaliação. |
@@ -25,6 +25,12 @@ e do [guia de benchmarks](https://open-jarvis.github.io/OpenJarvis/user-guide/be
 e da seção [System Access](https://open-jarvis.github.io/OpenJarvis/user-guide/system-access/),
 que esclarece a ausência de computer use.
 
+O guia técnico do OpenJarvis também documenta um registro de ferramentas com
+especificações, despacho central e resultados estruturados; o exemplo Browser
+Assistant combina navegação, `web_search` e raciocínio em várias etapas. Para o
+ARGUS, a lição prática é separar pesquisa online do controle de uma janela real e
+deixar cada ferramenta declarar claramente o que controla.
+
 ## A função principal do ARGUS: abrir e operar aplicativos
 
 Esse é um diferencial central do ARGUS, e não uma lacuna em relação ao
@@ -36,13 +42,17 @@ tela nem controla mouse/teclado. Ele pode abrir aplicativos por comandos de
 shell configurados pelo usuário, mas isso não equivale ao agente visual de
 desktop do ARGUS.
 
-O ajuste necessário no ARGUS era a orquestração: a instrução de reprodução no
-Spotify mandava chamar uma segunda ferramenta, e ações de abrir/focar apps podiam
-ser executadas em paralelo. Esta PR muda o fluxo para abrir ou focar o app antes
-da interação, serializa ações desktop dentro de uma mesma rodada e, no Windows,
-faz a busca, seleção visual da faixa e verificação de reprodução em uma chamada.
-Assim, ARGUS avança precisamente na função de abrir e operar aplicativos, área
-em que já tem uma capacidade que o OpenJarvis não oferece nativamente.
+O ajuste contínuo no ARGUS é tornar confiável a cadeia inteira: escolher um app
+instalado, abrir ou focar sua janela, identificar o controle certo, agir e
+verificar o resultado. O fluxo visual já faz essa sequência e o controle de
+mídia seleciona faixas pelo título/artista. Esta atualização corrige mais três
+falhas encontradas no uso real: modelo de busca Gemini descontinuado, seleção de
+Chrome mesmo quando ele não está instalado e disputa do Playwright com o perfil
+real de um navegador já aberto. Também permite usar o alvo visível como fallback
+de digitação no Windows quando a UI Automation não expõe o campo, mantendo a
+ação dentro da janela confirmada. Se o usuário pedir explicitamente uma ação em
+um editor ou terminal, o agente pode digitar nesse app dentro da tarefa sem
+pedir uma confirmação por tecla.
 
 ## Lacunas encontradas no ARGUS
 
@@ -62,6 +72,9 @@ em que já tem uma capacidade que o OpenJarvis não oferece nativamente.
 - Remover apaga apenas entradas do índice e nunca os arquivos de origem. O conteúdo dos documentos é tratado como dado não confiável, não como instrução.
 - Para tarefas visuais em aplicativos, `window_title` agora pode nomear um app fechado: ARGUS o abre, espera pela janela e a foca antes de agir. A reprodução por busca textual no Spotify faz essa cadeia automaticamente no Windows.
 - Chamadas de abrir app, controlar tela e mídia são executadas em sequência para evitar corrida entre abrir o aplicativo e tentar clicar nele.
+- Buscas usam `gemini-3.8-flash` com Google Search grounding e fontes quando disponíveis; `ARGUS_WEB_SEARCH_MODEL` permite trocar o modelo sem alterar código. O fallback DDG usa o pacote atual `ddgs` e informa quando provedores não trouxeram resultados, em vez de dizer que a busca não existe.
+- Pesquisa comum vai para `web_search`; tarefas que pedem uma janela visível vão para `screen_control`. `browser_control` usa um perfil isolado quando o navegador já está aberto e só usa o perfil salvo do usuário quando ele está fechado, evitando disputar um perfil ativo.
+- Pedidos de navegador escolhem o navegador padrão instalado; se o modelo pedir Chrome e o computador não tiver Chrome, o ARGUS continua com o navegador disponível. A busca no navegador gerenciado usa DuckDuckGo por padrão para evitar a página de captcha vista no Google.
 
 ## Próximos passos sugeridos
 

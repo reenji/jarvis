@@ -10,6 +10,7 @@ import subprocess
 import threading
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote_plus
 
 from playwright.async_api import (
     async_playwright,
@@ -57,98 +58,99 @@ def _user_agent() -> str:
     )
 
 
-def _real_profile_dir(browser: str) -> str:
-    home  = Path.home()
-    local = os.environ.get("LOCALAPPDATA", "")
-    roam  = os.environ.get("APPDATA", "")
+def _managed_profile_dir(browser: str) -> str:
+    """Use an ARGUS-owned profile so running personal browsers are never locked."""
+    profile = Path.home() / ".argus_profiles" / browser
+    profile.mkdir(parents=True, exist_ok=True)
+    return str(profile)
 
-    candidates: list[Path] = []
 
-    if _OS == "Windows":
-        m = {
-            "chrome":   [Path(local) / "Google"          / "Chrome"          / "User Data"],
-            "edge":     [Path(local) / "Microsoft"        / "Edge"            / "User Data"],
-            "brave":    [Path(local) / "BraveSoftware"    / "Brave-Browser"   / "User Data"],
-            "vivaldi":  [Path(local) / "Vivaldi"          / "User Data"],
-            "opera":    [Path(roam)  / "Opera Software"   / "Opera Stable",
-                         Path(local) / "Opera Software"   / "Opera Stable"],
-            "operagx":  [Path(roam)  / "Opera Software"   / "Opera GX Stable",
-                         Path(local) / "Opera Software"   / "Opera GX Stable"],
-        }
-        candidates = m.get(browser, [])
+def _browser_process_running(browser: str) -> bool:
+    process_names = {
+        "chrome": {"chrome.exe", "google chrome"},
+        "edge": {"msedge.exe", "microsoft edge"},
+        "brave": {"brave.exe", "brave browser"},
+        "firefox": {"firefox.exe", "firefox"},
+        "opera": {"opera.exe", "opera"},
+        "operagx": {"opera.exe", "opera gx"},
+        "vivaldi": {"vivaldi.exe", "vivaldi"},
+    }
+    try:
+        import psutil
 
-    elif _OS == "Darwin":
-        lib = home / "Library" / "Application Support"
-        m = {
-            "chrome":   [lib / "Google"             / "Chrome"],
-            "edge":     [lib / "Microsoft Edge"],
-            "brave":    [lib / "BraveSoftware"       / "Brave-Browser"],
-            "vivaldi":  [lib / "Vivaldi"],
-            "opera":    [lib / "com.operasoftware.Opera"],
-            "operagx":  [lib / "com.operasoftware.OperaGX"],
-        }
-        candidates = m.get(browser, [])
+        wanted = process_names.get(browser, set())
+        return any(
+            str(process.info.get("name") or "").casefold() in wanted
+            for process in psutil.process_iter(["name"])
+        )
+    except Exception:
+        # If process state is unknown, prefer the isolated profile.
+        return True
 
-    elif _OS == "Linux":
-        cfg = home / ".config"
-        m = {
-            "chrome":   [cfg / "google-chrome", cfg / "chromium"],
-            "edge":     [cfg / "microsoft-edge"],
-            "brave":    [cfg / "BraveSoftware" / "Brave-Browser"],
-            "vivaldi":  [cfg / "vivaldi"],
-            "opera":    [cfg / "opera"],
-            "operagx":  [cfg / "opera-gx"],
-        }
-        candidates = m.get(browser, [])
 
-    for p in candidates:
-        if p.exists():
-            print(f"[Browser] ✅ Real profile found for {browser}: {p}")
-            return str(p)
-
-    fallback = home / ".argus_profiles" / browser
-    fallback.mkdir(parents=True, exist_ok=True)
-    print(f"[Browser] ⚠️  Real profile not found for {browser}, using: {fallback}")
-    return str(fallback)
-
-def _firefox_profile_dir() -> Optional[str]:
+def _personal_profile_dir(browser: str) -> str | None:
     home = Path.home()
-
-    if _OS == "Windows":
-        base = Path(os.environ.get("APPDATA", "")) / "Mozilla" / "Firefox"
-    elif _OS == "Darwin":
-        base = home / "Library" / "Application Support" / "Firefox"
-    else:
-        base = home / ".mozilla" / "firefox"
-
-    ini = base / "profiles.ini"
-    if not ini.exists():
+    local = Path(os.environ.get("LOCALAPPDATA", ""))
+    roaming = Path(os.environ.get("APPDATA", ""))
+    if browser == "firefox":
+        base = (
+            Path(os.environ.get("APPDATA", "")) / "Mozilla/Firefox"
+            if _OS == "Windows"
+            else home / ("Library/Application Support/Firefox" if _OS == "Darwin" else ".mozilla/firefox")
+        )
+        profiles = base / "profiles.ini"
+        if profiles.is_file():
+            current: dict[str, str] = {}
+            for line in profiles.read_text(encoding="utf-8", errors="ignore").splitlines() + ["["]:
+                line = line.strip()
+                if line.startswith("["):
+                    path = current.get("Path", "")
+                    if path and current.get("Default") == "1":
+                        if current.get("IsRelative", "1") == "1":
+                            path = str(base / path)
+                        if Path(path).is_dir():
+                            return path
+                    current = {}
+                elif "=" in line:
+                    key, _, value = line.partition("=")
+                    current[key.strip()] = value.strip()
         return None
+    if _OS == "Windows":
+        paths = {
+            "chrome": [local / "Google/Chrome/User Data"],
+            "edge": [local / "Microsoft/Edge/User Data"],
+            "brave": [local / "BraveSoftware/Brave-Browser/User Data"],
+            "vivaldi": [local / "Vivaldi/User Data"],
+            "opera": [roaming / "Opera Software/Opera Stable", local / "Opera Software/Opera Stable"],
+            "operagx": [roaming / "Opera Software/Opera GX Stable", local / "Opera Software/Opera GX Stable"],
+        }
+    elif _OS == "Darwin":
+        support = home / "Library/Application Support"
+        paths = {
+            "chrome": [support / "Google/Chrome"],
+            "edge": [support / "Microsoft Edge"],
+            "brave": [support / "BraveSoftware/Brave-Browser"],
+            "vivaldi": [support / "Vivaldi"],
+            "opera": [support / "com.operasoftware.Opera"],
+            "operagx": [support / "com.operasoftware.OperaGX"],
+        }
+    else:
+        config = home / ".config"
+        paths = {
+            "chrome": [config / "google-chrome", config / "chromium"],
+            "edge": [config / "microsoft-edge"],
+            "brave": [config / "BraveSoftware/Brave-Browser"],
+            "vivaldi": [config / "vivaldi"],
+            "opera": [config / "opera"],
+            "operagx": [config / "opera-gx"],
+        }
+    return next((str(path) for path in paths.get(browser, []) if path.is_dir()), None)
 
-    current: dict[str, str] = {}
-    default_path: Optional[str] = None
 
-    for line in ini.read_text(encoding="utf-8", errors="ignore").splitlines():
-        line = line.strip()
-        if line.startswith("["):
-            p = current.get("Path", "")
-            if p and current.get("Default") == "1":
-                is_rel = current.get("IsRelative", "1") == "1"
-                default_path = str(base / p) if is_rel else p
-            current = {}
-        elif "=" in line:
-            k, _, v = line.partition("=")
-            current[k.strip()] = v.strip()
-
-    p = current.get("Path", "")
-    if p and current.get("Default") == "1":
-        is_rel = current.get("IsRelative", "1") == "1"
-        default_path = str(base / p) if is_rel else p
-
-    if default_path and Path(default_path).exists():
-        print(f"[Browser] Firefox real profile: {default_path}")
-        return default_path
-    return None
+def _browser_profile_dir(browser: str) -> str:
+    if _browser_process_running(browser):
+        return _managed_profile_dir(browser)
+    return _personal_profile_dir(browser) or _managed_profile_dir(browser)
 
 def _find_opera_windows() -> Optional[str]:
     local  = os.environ.get("LOCALAPPDATA", "")
@@ -212,6 +214,28 @@ def _find_exe_windows(prog_name: str) -> Optional[str]:
     except Exception:
         pass
     return None
+
+
+def _find_known_exe_windows(name: str) -> Optional[str]:
+    local = Path(os.environ.get("LOCALAPPDATA", ""))
+    program_files = Path(os.environ.get("PROGRAMFILES", r"C:\Program Files"))
+    program_files_x86 = Path(os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"))
+    candidates = {
+        "chrome": [
+            local / "Google/Chrome/Application/chrome.exe",
+            program_files / "Google/Chrome/Application/chrome.exe",
+            program_files_x86 / "Google/Chrome/Application/chrome.exe",
+        ],
+        "edge": [
+            program_files / "Microsoft/Edge/Application/msedge.exe",
+            program_files_x86 / "Microsoft/Edge/Application/msedge.exe",
+            local / "Microsoft/Edge/Application/msedge.exe",
+        ],
+    }
+    for path in candidates.get(name, []):
+        if path.is_file():
+            return str(path)
+    return _find_exe_windows("msedge" if name == "edge" else name)
 
 _BROWSER_SPECS: dict[str, dict] = {
     "Windows": {
@@ -301,53 +325,31 @@ def _resolve_browser(name: str) -> dict | None:
                     exe = str(found_bins[0])
                     break
 
-    if not exe and _OS == "Windows" and not channel:
-        exe = _find_exe_windows(name)
+    if not exe and _OS == "Windows":
+        exe = _find_known_exe_windows(name)
 
     return {"engine": engine, "exe": exe, "channel": channel}
 
 
+def _browser_is_available(name: str) -> bool:
+    spec = _resolve_browser(name)
+    if spec is None:
+        return False
+    if spec.get("exe"):
+        return Path(spec["exe"]).is_file()
+    if spec.get("channel"):
+        return False
+    return bool(spec.get("engine") == "webkit" and _OS == "Darwin")
+
+
 def _detect_default_browser() -> str:
-    try:
-        if _OS == "Windows":
-            import winreg
-            k = winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\Shell\Associations"
-                r"\UrlAssociations\http\UserChoice",
-            )
-            prog_id = winreg.QueryValueEx(k, "ProgId")[0].lower()
-            winreg.CloseKey(k)
-            for kw in ("edge", "firefox", "opera", "brave", "vivaldi", "chrome"):
-                if kw in prog_id:
-                    return kw
-        elif _OS == "Darwin":
-            out = subprocess.run(
-                ["defaults", "read",
-                 "com.apple.LaunchServices/com.apple.launchservices.secure",
-                 "LSHandlers"],
-                capture_output=True, text=True, timeout=5,
-            ).stdout.lower()
-            for kw in ("firefox", "opera", "brave", "vivaldi", "safari", "chrome", "edge"):
-                if kw in out:
-                    return kw
-        elif _OS == "Linux":
-            out = subprocess.run(
-                ["xdg-settings", "get", "default-web-browser"],
-                capture_output=True, text=True, timeout=5,
-            ).stdout.lower()
-            for kw in ("firefox", "opera", "brave", "vivaldi", "chrome", "edge"):
-                if kw in out:
-                    return kw
-    except Exception:
-        pass
-    return "chrome"
+    from actions.browser_defaults import detect_default_browser
+    return detect_default_browser()
 
 
 class _BrowserSession:
     """
-    Bir tarayıcı örneği için tam oturum.
-    Tüm tarayıcılar launch_persistent_context ile gerçek profil üzerinde açılır.
+    Browser session isolated from the user's normal browser profile.
     """
 
     def __init__(self, browser_name: str):
@@ -408,8 +410,7 @@ class _BrowserSession:
 
     async def _launch(self):
         """
-        Tarayıcıyı gerçek kullanıcı profiliyle başlatır.
-        Context zaten açıksa hiçbir şey yapmaz.
+        Launch ARGUS's persistent profile without taking over a personal profile.
         """
         if self._context is not None:
             return
@@ -425,9 +426,7 @@ class _BrowserSession:
         engine_obj  = getattr(self._pw, engine_name)
 
         if engine_name == "firefox":
-            profile = _firefox_profile_dir() or str(
-                Path.home() / ".argus_profiles" / "firefox"
-            )
+            profile = _managed_profile_dir("firefox")
             kwargs: dict = {
                 "headless":    False,
                 "slow_mo":     0,
@@ -436,13 +435,7 @@ class _BrowserSession:
             }
             if exe:
                 kwargs["executable_path"] = exe
-            try:
-                self._context = await engine_obj.launch_persistent_context(profile, **kwargs)
-            except Exception as e:
-                print(f"[Browser] Firefox real profile failed ({e}), using ARGUS profile")
-                argus = str(Path.home() / ".argus_profiles" / "firefox_argus")
-                Path(argus).mkdir(parents=True, exist_ok=True)
-                self._context = await engine_obj.launch_persistent_context(argus, **kwargs)
+            self._context = await engine_obj.launch_persistent_context(profile, **kwargs)
 
             await asyncio.sleep(0.5)  
             self._page = await self._context.new_page()
@@ -464,7 +457,8 @@ class _BrowserSession:
             print(f"[Browser] ✅ Safari launched")
             return
 
-        profile = _real_profile_dir(self.browser_name)
+        profile = _browser_profile_dir(self.browser_name)
+        managed_profile = _managed_profile_dir(self.browser_name)
 
         kwargs = {
             "headless":    False,
@@ -493,24 +487,20 @@ class _BrowserSession:
 
         try:
             self._context = await engine_obj.launch_persistent_context(profile, **kwargs)
-            await asyncio.sleep(0.5) 
-            self._page = await self._context.new_page()
-            print(f"[Browser] ✅ Launched [{label}] profile={profile}")
-            return
-        except Exception as e:
-            print(f"[Browser] ⚠️  Real profile failed for {label}: {e}")
-
-        argus_profile = str(Path.home() / ".argus_profiles" / self.browser_name)
-        Path(argus_profile).mkdir(parents=True, exist_ok=True)
-        print(f"[Browser] Retrying with ARGUS profile: {argus_profile}")
-
-        try:
-            self._context = await engine_obj.launch_persistent_context(argus_profile, **kwargs)
             await asyncio.sleep(0.5)
             self._page = await self._context.new_page()
-            print(f"[Browser] ✅ Launched [{label}] with ARGUS profile")
-        except Exception as e2:
-            raise RuntimeError(f"Could not launch {self.browser_name}: {e2}") from e2
+            print(f"[Browser] ✅ Launched [{label}] profile={profile}")
+        except Exception as exc:
+            if profile == managed_profile:
+                raise RuntimeError(f"Could not launch {self.browser_name}: {exc}") from exc
+            print(f"[Browser] Personal profile unavailable for {label}; switching to ARGUS profile: {exc}")
+            try:
+                self._context = await engine_obj.launch_persistent_context(managed_profile, **kwargs)
+                await asyncio.sleep(0.5)
+                self._page = await self._context.new_page()
+                print(f"[Browser] ✅ Launched [{label}] isolated_profile={managed_profile}")
+            except Exception as fallback_exc:
+                raise RuntimeError(f"Could not launch {self.browser_name}: {fallback_exc}") from fallback_exc
 
 
     async def _get_page(self) -> Page:
@@ -553,15 +543,15 @@ class _BrowserSession:
             return f"Opened: {result_url}"
         return f"Could not open: {url}"
 
-    async def search(self, query: str, engine: str = "google") -> str:
+    async def search(self, query: str, engine: str = "duckduckgo") -> str:
         _engines = {
             "google":     "https://www.google.com/search?q=",
             "bing":       "https://www.bing.com/search?q=",
             "duckduckgo": "https://duckduckgo.com/?q=",
             "yandex":     "https://yandex.com/search/?text=",
         }
-        base = _engines.get(engine.lower(), _engines["google"])
-        return await self.go_to(base + query.replace(" ", "+"))
+        base = _engines.get(engine.lower(), _engines["duckduckgo"])
+        return await self.go_to(base + quote_plus(query))
 
     async def click(self, selector: str = None, text: str = None) -> str:
         page = await self._get_page()
@@ -751,19 +741,42 @@ class _SessionRegistry:
                 print(f"[Registry] New session: {browser_name}")
             return self._sessions[browser_name]
 
+    @staticmethod
+    def _normalize_name(browser_name: str | None) -> str:
+        name = str(browser_name or "").lower().strip()
+        return _ALIASES.get(name, name)
+
+    def _select_name(self, browser_name: str | None) -> tuple[str, str]:
+        requested = self._normalize_name(
+            browser_name or self._active_browser or _detect_default_browser()
+        )
+        if _browser_is_available(requested):
+            return requested, ""
+        candidates = [
+            _detect_default_browser(), "brave", "edge", "chrome", "firefox",
+            "opera", "operagx", "vivaldi", "safari",
+        ]
+        for candidate in candidates:
+            candidate = self._normalize_name(candidate)
+            if _browser_is_available(candidate):
+                if candidate == requested:
+                    return candidate, ""
+                return candidate, f"{requested.title()} is unavailable; using {candidate.title()}."
+        return requested, ""
+
+    def get_selected(self, browser_name: str | None = None) -> tuple[_BrowserSession, str]:
+        selected, notice = self._select_name(browser_name)
+        sess = self._get_or_create(selected)
+        self._active_browser = selected
+        return sess, notice
+
     def get(self, browser_name: str | None = None) -> _BrowserSession:
-        if not browser_name:
-            browser_name = self._active_browser or _detect_default_browser()
-        browser_name = _ALIASES.get(browser_name.lower().strip(), browser_name.lower().strip())
-        sess = self._get_or_create(browser_name)
-        self._active_browser = browser_name
-        return sess
+        return self.get_selected(browser_name)[0]
 
     def switch(self, browser_name: str) -> str:
-        browser_name = _ALIASES.get(browser_name.lower().strip(), browser_name.lower().strip())
-        self._get_or_create(browser_name)
-        self._active_browser = browser_name
-        return f"Active browser → {browser_name}"
+        sess, notice = self.get_selected(browser_name)
+        prefix = f"{notice} " if notice else ""
+        return f"{prefix}Active browser → {sess.browser_name}"
 
     def close_one(self, browser_name: str) -> str:
         with self._lock:
@@ -801,6 +814,21 @@ class _SessionRegistry:
 
 _registry = _SessionRegistry()
 
+
+def browser_window_title(browser_name: str | None = None) -> str:
+    """Return an installed browser name suitable for opening/focusing its visible window."""
+    selected, _ = _registry._select_name(browser_name)
+    return {
+        "chrome": "Google Chrome",
+        "edge": "Microsoft Edge",
+        "firefox": "Firefox",
+        "brave": "Brave Browser",
+        "opera": "Opera",
+        "operagx": "Opera GX",
+        "vivaldi": "Vivaldi",
+        "safari": "Safari",
+    }.get(selected, selected.title())
+
 def browser_control(
     parameters:    dict = None,
     response=None,
@@ -829,7 +857,7 @@ def browser_control(
         return result
 
     try:
-        sess = _registry.get(browser)
+        sess, browser_notice = _registry.get_selected(browser)
     except Exception as e:
         result = f"Could not start browser session: {e}"
         _log(player, result)
@@ -839,7 +867,7 @@ def browser_control(
         if action == "go_to":
             result = sess.run(sess.go_to(params.get("url", "")))
         elif action == "search":
-            result = sess.run(sess.search(params.get("query", ""), params.get("engine", "google")))
+            result = sess.run(sess.search(params.get("query", ""), params.get("engine", "duckduckgo")))
         elif action == "click":
             result = sess.run(sess.click(params.get("selector"), params.get("text")))
         elif action == "type":
@@ -881,6 +909,9 @@ def browser_control(
         result = f"Browser action '{action}' timed out (60s)."
     except Exception as e:
         result = f"Browser error ({action}): {e}"
+
+    if browser_notice:
+        result = f"{browser_notice} {result}"
 
     _log(player, result)
     return result
