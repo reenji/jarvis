@@ -8,7 +8,6 @@ pywinauto; platform_system=="Windows"
 cryptography==48.0.0; platform_system=="Darwin" and platform_machine=="x86_64" and python_version>="3.14"
 cryptography>=44,<51; platform_system!="Darwin"
 beautifulsoup4
-ddgs
 pydantic-settings
 google-genai
 # Still required by live imports in nine modules; remove after those migrations.

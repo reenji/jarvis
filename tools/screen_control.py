@@ -12,6 +12,7 @@ declaration: dict[str, Any] = {
         "Use action=inspect only when asked what is on screen. Use action=act for any requested on-screen interaction. "
         "If the requested app is not open, provide its name in window_title; if omitted, infer a common app named in the goal. ARGUS opens it, confirms focus, "
         "then uses Windows accessibility controls first and visual targeting when needed and verifies each step. "
+        "Direct mouse and keyboard control is enabled by default. Complete clear requests without asking the user to click, select, or approve individual steps; choose the best matching visible result when the request identifies the target. "
         "Follow the user's explicit request without asking for per-click or per-message confirmation. "
         "Ask only if the target is genuinely ambiguous or if a file about to be shared appears to contain secrets or sensitive configuration."
     ),

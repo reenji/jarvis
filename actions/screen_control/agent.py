@@ -126,6 +126,26 @@ def _share_intent(goal: str) -> bool:
     return (explicit_share and (file_target or sensitive_file_ref)) or explicit_send_file or (sensitive_file_ref and any(word in text for word in ("send", "enviar", "envie", "mandar", "mande")))
 
 
+def _anti_bot_verification_visible(window_title: str, process_name: str, controls: list) -> bool:
+    labels = [str(window_title or ""), str(process_name or "")]
+    for control in controls:
+        if isinstance(control, dict):
+            labels.append(str(control.get("name", "") or ""))
+        else:
+            labels.append(str(getattr(control, "name", "") or ""))
+    visible_text = _fold_text(" ".join(labels))
+    return any(marker in visible_text for marker in (
+        "unusual traffic from your computer network",
+        "our systems have detected unusual traffic",
+        "consultas automatizadas",
+        "tráfego incomum",
+        "i am not a robot",
+        "im not a robot",
+        "verify you are human",
+        "captcha",
+    ))
+
+
 def _sensitive_visible_file(goal: str, controls: list) -> tuple[str, str] | None:
     sensitive_names = re.findall(
         r"(?i)(?:\.env(?:\.[A-Za-z0-9_.-]+)?|docker-compose(?:\.[A-Za-z0-9_.-]+)?|"
@@ -225,6 +245,15 @@ class ScreenAgent:
                     return ScreenRunResult(
                         "ask_user",
                         f"O arquivo {name!r} parece ser {reason}. Confirma que devo compartilhá-lo?",
+                        step - 1,
+                        run_id,
+                    )
+                if _anti_bot_verification_visible(
+                    capture.window.title, capture.window.process_name, controls
+                ):
+                    return ScreenRunResult(
+                        "fail",
+                        "A página apresentou uma verificação anti-robô. Parei sem interagir, repetir a busca ou tentar contorná-la.",
                         step - 1,
                         run_id,
                     )
