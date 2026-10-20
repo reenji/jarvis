@@ -66,6 +66,7 @@ computer_control = _lazy_action("actions.computer_control", "computer_control")
 game_updater = _lazy_action("actions.game_updater", "game_updater")
 request_presentation = _lazy_action("actions.presentation_maker", "request_presentation")
 request_deep_research = _lazy_action("actions.deep_research", "request_deep_research")
+local_knowledge = _lazy_action("actions.local_knowledge", "manage_local_knowledge")
 
 
 def get_base_dir():
@@ -579,9 +580,10 @@ TOOL_DECLARATIONS = [
         "description": (
             "Controls music playback, primarily Spotify. Use when the user asks to play, resume, pause, "
             "stop, toggle, skip, or go back in Spotify, Apple Music, YouTube Music, or the active media player. "
-            "Spotify is the default platform. Pass a song, artist, album, playlist, or Spotify link in query. "
-            "When a plain Spotify search opens results, immediately use computer_control screen_click to select "
-            "the matching visible track; do not ask the user to choose it."
+            "Spotify is the default platform. Pass the requested song, artist, album, playlist, or Spotify link in query. "
+            "On Windows, a plain Spotify search opens the app, selects a matching visible result, and verifies playback "
+            "in this call; do not ask the user to select a track or call another screen tool. "
+            "If a match is ambiguous or cannot be verified, report that specific issue."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -1143,6 +1145,8 @@ TOOL_DECLARATIONS = [
 # as the legacy one-action computer controls.
 from tools.screen_control import declaration as SCREEN_CONTROL_DECLARATION
 TOOL_DECLARATIONS.append(SCREEN_CONTROL_DECLARATION)
+from tools.local_knowledge import declaration as LOCAL_KNOWLEDGE_DECLARATION
+TOOL_DECLARATIONS.append(LOCAL_KNOWLEDGE_DECLARATION)
 
 # Tool names exposed by hosted clients. The names here are Gemini function
 # declaration names (which differ from a few implementation module names).
@@ -1159,6 +1163,7 @@ CLOUD_SAFE_ACTIONS = frozenset({
 LOCAL_MACHINE_ONLY_ACTIONS = frozenset({
     "computer_control",
     "screen_control",
+    "local_knowledge",
     "open_app",
     "file_controller",
     "media_control",
@@ -1762,6 +1767,9 @@ class ArgusLive:
                     else:
                         self._pending_screen_share_goal = None
 
+            elif name == "local_knowledge":
+                result = await asyncio.to_thread(local_knowledge, parameters=args)
+
             elif name == "computer_settings":
                 r = await asyncio.to_thread(lambda: computer_settings(parameters=args, response=None, player=self.ui))
                 result = r or "Done."
@@ -1898,6 +1906,7 @@ class ArgusLive:
             "computer_settings", "computer_control", "desktop_control", "file_controller",
             "file_processor", "code_helper", "dev_agent", "game_updater",
             "create_presentation", "save_memory", "argus_ui_control", "graphics_quality",
+            "local_knowledge", "open_app", "screen_control", "media_control",
         }
         call_list = list(calls or [])
         if any(getattr(call, "name", "") in mutating for call in call_list):

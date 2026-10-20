@@ -92,16 +92,28 @@ class ScreenAgent:
             capture, controls, model=self.config.vision_model, client=self.vision_client
         )
 
+    def _focus_or_launch(self, window_title: str, *, deadline: float) -> bool:
+        if bring_to_front(window_title):
+            return True
+
+        from actions.open_app import open_app
+
+        launch_result = open_app({"app_name": window_title})
+        if not launch_result.startswith("Opened "):
+            return False
+        while time.monotonic() < deadline:
+            if self.abort_controller.aborted:
+                return False
+            if bring_to_front(window_title):
+                return True
+            time.sleep(0.4)
+        return False
+
     def run(self, objective: str, *, window_title: str = "", allow_sensitive_share: bool = False) -> ScreenRunResult:
         goal = " ".join(str(objective or "").split())
         run_id = uuid.uuid4().hex[:12]
         if not goal:
             return ScreenRunResult("fail", "Diga o que devo fazer na tela.", 0, run_id)
-        if window_title:
-            if not bring_to_front(window_title):
-                return ScreenRunResult("fail", f"Não encontrei uma janela aberta correspondente a {window_title!r}.", 0, run_id)
-            time.sleep(0.25)
-
         started = time.monotonic()
         history: list[dict] = []
         previous_hash = ""
@@ -112,6 +124,13 @@ class ScreenAgent:
             extra={"screen_run_id": run_id, "objective_chars": len(goal)},
         )
         try:
+            if window_title:
+                if not self._focus_or_launch(window_title, deadline=time.monotonic() + 12.0):
+                    if self.abort_controller.aborted:
+                        return ScreenRunResult("aborted", "Interrompi a abertura do aplicativo pelo atalho de emergência.", 0, run_id)
+                    return ScreenRunResult("fail", f"Não consegui abrir e focar a janela de {window_title!r}.", 0, run_id)
+                time.sleep(0.25)
+
             for step in range(1, self.config.max_steps + 1):
                 if self.abort_controller.aborted:
                     return ScreenRunResult("aborted", "Interrompi o controle da tela pelo atalho de emergência.", step - 1, run_id)

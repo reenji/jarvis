@@ -202,6 +202,33 @@ def _generic_media_key(action: str) -> str:
         return f"System media control is unavailable: {exc}"
 
 
+def _select_spotify_search_result(query: str) -> str:
+    """Open Spotify's matching Windows search result and verify playback visually."""
+    from core.computer_control_preferences import load_direct_computer_control
+
+    if not load_direct_computer_control():
+        return (
+            f"Spotify search results for {query!r} are open, but direct mouse/keyboard "
+            "control is disabled in Settings → Actions; I did not select a result."
+        )
+
+    from actions.screen_control.agent import ScreenAgent
+
+    outcome = ScreenAgent().run(
+        "Find the visible Spotify search result that best matches this exact request: "
+        f"{query!r}. Match the track title and artist when the user provided them. "
+        "If Spotify is still loading the search results, wait and inspect again. "
+        "Click the matching result to start playback, then verify the requested track "
+        "is playing. Do not ask the user to select it.",
+        window_title="Spotify",
+    )
+    if outcome.status == "success":
+        return outcome.summary
+    if outcome.status == "ask_user":
+        return f"I could not choose a unique matching Spotify result: {outcome.summary}"
+    return f"Spotify opened, but I could not complete and verify playback: {outcome.summary}"
+
+
 def media_control(parameters: dict | None = None, response=None, player=None, session_memory=None) -> str:
     """Control Spotify, Apple Music, YouTube Music, or the active system player."""
     params = parameters or {}
@@ -238,6 +265,8 @@ def media_control(parameters: dict | None = None, response=None, player=None, se
         if ok:
             if uri:
                 return "Opened the requested item in Spotify."
+            if _SYSTEM == "Windows":
+                return _select_spotify_search_result(query)
             return f"Opened Spotify results for {query}. I will click the matching track to start playback."
         return f"Could not open Spotify: {detail}"
 

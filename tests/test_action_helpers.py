@@ -42,6 +42,60 @@ class ActionHelperTests(unittest.TestCase):
             self.assertIn("Opened", open_app.open_app({"app_name": "Please open Google Chrome"}))
         launcher.assert_called_once_with("google-chrome")
 
+    def test_windows_spotify_search_selects_and_verifies_result_in_same_call(self):
+        with (
+            patch.object(media_control, "_SYSTEM", "Windows"),
+            patch.object(media_control, "_open_uri", return_value=(True, "")),
+            patch.object(media_control, "_select_spotify_search_result", return_value="Playing the exact requested track.") as select,
+        ):
+            result = media_control.media_control({
+                "action": "play_query",
+                "platform": "spotify",
+                "query": "Never Gonna Give You Up Rick Astley",
+            })
+
+        self.assertEqual(result, "Playing the exact requested track.")
+        select.assert_called_once_with("Never Gonna Give You Up Rick Astley")
+
+    def test_spotify_visual_selection_focuses_app_and_obeys_direct_control_setting(self):
+        outcome = SimpleNamespace(status="success", summary="Faixa solicitada em reprodução.")
+        with (
+            patch("core.computer_control_preferences.load_direct_computer_control", return_value=True),
+            patch("actions.screen_control.agent.ScreenAgent") as screen_agent,
+        ):
+            screen_agent.return_value.run.return_value = outcome
+            result = media_control._select_spotify_search_result("artista - faixa")
+
+        self.assertEqual(result, "Faixa solicitada em reprodução.")
+        objective = screen_agent.return_value.run.call_args.args[0]
+        self.assertIn("artista - faixa", objective)
+        self.assertEqual(screen_agent.return_value.run.call_args.kwargs["window_title"], "Spotify")
+
+    def test_spotify_visual_selection_respects_disabled_mouse_keyboard_preference(self):
+        with (
+            patch("core.computer_control_preferences.load_direct_computer_control", return_value=False),
+            patch("actions.screen_control.agent.ScreenAgent") as screen_agent,
+        ):
+            result = media_control._select_spotify_search_result("artista - faixa")
+
+        self.assertIn("disabled", result)
+        screen_agent.assert_not_called()
+
+    def test_spotify_link_opens_directly_without_visually_selecting_search_result(self):
+        with (
+            patch.object(media_control, "_SYSTEM", "Windows"),
+            patch.object(media_control, "_open_uri", return_value=(True, "")),
+            patch.object(media_control, "_select_spotify_search_result") as select,
+        ):
+            result = media_control.media_control({
+                "action": "play_query",
+                "platform": "spotify",
+                "query": "https://open.spotify.com/track/abc123",
+            })
+
+        self.assertEqual(result, "Opened the requested item in Spotify.")
+        select.assert_not_called()
+
     def test_successful_macos_direct_launch_has_no_artificial_post_wait(self):
         completed = MagicMock(returncode=0)
         with (
