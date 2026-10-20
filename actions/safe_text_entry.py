@@ -15,11 +15,18 @@ except ImportError:
 
 VISIBLE_TYPING_INTERVAL_SECONDS = 0.002
 TEXT_ROLES = {"AXTextField", "AXTextArea", "AXComboBox", "AXSearchField"}
+WINDOWS_TEXT_ROLES = {
+    "Edit": "AXTextField",
+    "Document": "AXTextArea",
+    "ComboBox": "AXComboBox",
+}
 BROWSER_APPS = {"Google Chrome", "Brave Browser", "Microsoft Edge", "Arc", "Safari"}
 MESSAGING_APPS = {"Messages", "WhatsApp", "Telegram", "Discord", "Signal", "Messenger"}
 SAFE_POINTER_MESSAGE_APPS = BROWSER_APPS | MESSAGING_APPS
 UNSAFE_TYPING_APPS = {
     "Terminal",
+    "PowerShell",
+    "Command Prompt",
     "iTerm2",
     "Visual Studio Code",
     "Code",
@@ -43,7 +50,37 @@ ADDRESS_LABEL_MARKERS = (
     "url",
     "location",
     "omnibox",
+    "endereço",
+    "barra de endereço",
+    "localização",
 )
+MESSAGE_LABEL_MARKERS = MESSAGE_LABEL_MARKERS + (
+    "mensagem",
+    "resposta",
+    "conversa",
+    "bate-papo",
+    "enviar",
+)
+
+WINDOWS_APP_NAMES = {
+    "chrome.exe": "Google Chrome",
+    "brave.exe": "Brave Browser",
+    "msedge.exe": "Microsoft Edge",
+    "arc.exe": "Arc",
+    "whatsapp.exe": "WhatsApp",
+    "telegram.exe": "Telegram",
+    "discord.exe": "Discord",
+    "signal.exe": "Signal",
+    "messenger.exe": "Messenger",
+    "code.exe": "Visual Studio Code",
+    "windowsterminal.exe": "Terminal",
+    "wt.exe": "Terminal",
+    "powershell.exe": "PowerShell",
+    "pwsh.exe": "PowerShell",
+    "cmd.exe": "Command Prompt",
+    "bash.exe": "Terminal",
+    "wsl.exe": "Terminal",
+}
 
 
 @dataclass
@@ -69,29 +106,120 @@ def _actual_os() -> str:
 
 
 def _frontmost_app_name() -> str:
-    if _actual_os() != "mac":
-        return ""
-    try:
-        from AppKit import NSWorkspace
+    os_name = _actual_os()
+    if os_name == "windows":
+        return str(_windows_accessibility_focus_info().get("frontApp", ""))
+    if os_name == "linux":
+        return str(_linux_accessibility_focus_info().get("frontApp", ""))
+    if os_name == "mac":
+        try:
+            from AppKit import NSWorkspace
 
-        app = NSWorkspace.sharedWorkspace().frontmostApplication()
-        return str(app.localizedName() or "").strip() if app else ""
-    except Exception:
-        pass
+            app = NSWorkspace.sharedWorkspace().frontmostApplication()
+            return str(app.localizedName() or "").strip() if app else ""
+        except Exception:
+            pass
 
-    script = 'tell application "System Events" to return name of first application process whose frontmost is true'
-    try:
-        result = subprocess.run(
-            ["osascript", "-e", script],
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except Exception:
-        pass
+        script = 'tell application "System Events" to return name of first application process whose frontmost is true'
+        try:
+            result = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                timeout=2,
+            )
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except Exception:
+            pass
     return ""
+
+
+def _windows_accessibility_focus_info() -> dict:
+    """Read the focused Windows UI Automation control and its owning app."""
+    try:
+        from pywinauto.uia_defines import IUIA
+        from pywinauto.uia_element_info import UIAElementInfo
+
+        focused_element = IUIA().get_focused_element()
+        if focused_element is None:
+            return {}
+        info = UIAElementInfo(focused_element)
+        process_id = int(getattr(info, "process_id", 0) or 0)
+        process_name = ""
+        if process_id:
+            try:
+                import psutil
+
+                process_name = psutil.Process(process_id).name()
+            except Exception:
+                pass
+
+        app_name = WINDOWS_APP_NAMES.get(process_name.casefold(), process_name)
+        raw_role = str(getattr(info, "control_type", "") or "")
+        role = WINDOWS_TEXT_ROLES.get(raw_role, raw_role)
+        name = str(getattr(info, "name", "") or "")
+        automation_id = str(getattr(info, "automation_id", "") or "")
+        class_name = str(getattr(info, "class_name", "") or "")
+        description = " ".join(part for part in (automation_id, class_name) if part)
+        if getattr(info, "is_password", False):
+            description = f"{description} password field".strip()
+        return {
+            "frontApp": app_name,
+            "role": role,
+            "title": name,
+            "description": description,
+            "value": "",
+            "subrole": raw_role,
+        }
+    except Exception as e:
+        print(f"[SafeTextEntry] Windows focused-control probe failed: {e}")
+        return {}
+
+
+def _linux_accessibility_focus_info() -> dict:
+    """Best-effort AT-SPI lookup for the currently focused Linux control."""
+    try:
+        import pyatspi
+
+        desktop = pyatspi.Registry.getDesktop(0)
+        pending = [desktop]
+        while pending:
+            node = pending.pop()
+            try:
+                states = node.getState()
+                if states.contains(pyatspi.STATE_FOCUSED):
+                    role_name = str(node.getRoleName() or "")
+                    role = {
+                        "text": "AXTextArea",
+                        "entry": "AXTextField",
+                        "password text": "AXTextField",
+                        "combo box": "AXComboBox",
+                        "text entry": "AXTextField",
+                    }.get(role_name.casefold(), role_name)
+                    try:
+                        app = node.getApplication()
+                        app_name = str(getattr(app, "name", "") or "")
+                    except Exception:
+                        app_name = ""
+                    name = str(node.getName() or "")
+                    return {
+                        "frontApp": app_name,
+                        "role": role,
+                        "title": name,
+                        "description": role_name,
+                        "value": "",
+                        "subrole": role_name,
+                    }
+            except Exception:
+                pass
+            try:
+                pending.extend(node[index] for index in range(node.childCount))
+            except Exception:
+                continue
+    except Exception as e:
+        print(f"[SafeTextEntry] Linux focused-control probe unavailable: {e}")
+    return {}
 
 
 class MouseClickBlocker:
@@ -197,6 +325,19 @@ class PyAutoGuiFastPause:
 def _contains_any(text: str, markers: tuple[str, ...]) -> bool:
     lowered = str(text or "").lower()
     return any(marker in lowered for marker in markers)
+
+
+def _matches_name(value: str, names: set[str]) -> bool:
+    normalized = str(value or "").strip().casefold()
+    return any(normalized == str(name).casefold() for name in names)
+
+
+def _is_unsafe_typing_app(value: str) -> bool:
+    return _matches_name(value, UNSAFE_TYPING_APPS)
+
+
+def _is_messaging_app(value: str) -> bool:
+    return _matches_name(value, MESSAGING_APPS)
 
 
 def _browser_dom_focus_info() -> dict:
@@ -384,10 +525,7 @@ function safari() {{
         return {}
 
 
-def _accessibility_focus_info() -> dict:
-    if _actual_os() != "mac":
-        return {}
-
+def _macos_accessibility_focus_info() -> dict:
     script = r'''
 tell application "System Events"
     set frontProcess to first application process whose frontmost is true
@@ -449,6 +587,17 @@ end tell
     }
 
 
+def _accessibility_focus_info() -> dict:
+    os_name = _actual_os()
+    if os_name == "mac":
+        return _macos_accessibility_focus_info()
+    if os_name == "windows":
+        return _windows_accessibility_focus_info()
+    if os_name == "linux":
+        return _linux_accessibility_focus_info()
+    return {}
+
+
 def _dom_textish(dom: dict) -> bool:
     tag = str(dom.get("tag", "")).lower()
     input_type = str(dom.get("type", "")).lower()
@@ -483,7 +632,7 @@ def _dom_message_composer(info: dict) -> bool:
 def _pointer_message_target() -> SafeTextEntryResult:
     _require_pyautogui()
     front_app = _frontmost_app_name()
-    if front_app in UNSAFE_TYPING_APPS:
+    if _is_unsafe_typing_app(front_app):
         return SafeTextEntryResult(False, f"I will not type into {front_app}; that app is blocked for safety.")
 
     x, y = pyautogui.position()
@@ -512,24 +661,23 @@ def _pointer_message_target() -> SafeTextEntryResult:
 
 def validate_safe_text_target(purpose: str = "generic", allow_pointer_fallback: bool = False) -> SafeTextEntryResult:
     purpose_key = str(purpose or "generic").lower().strip()
-    if _actual_os() != "mac":
-        return SafeTextEntryResult(False, "Safe text-field validation is only implemented on macOS.")
-
-    dom_info = _browser_dom_focus_info()
-    front_app = str(dom_info.get("frontApp", "")).strip()
-    dom = dom_info.get("dom") or {}
-    if front_app in BROWSER_APPS and dom.get("ok") and _dom_textish(dom):
-        label = " ".join(str(dom.get(k, "")) for k in ("label", "role", "tag"))
-        url = str(dom_info.get("url") or dom.get("url") or "")
-        if _contains_any(label, ADDRESS_LABEL_MARKERS):
-            return SafeTextEntryResult(False, "I will not type because the browser address/search bar appears to be focused.")
-        if purpose_key == "message":
-            if _dom_message_composer(dom_info):
-                return SafeTextEntryResult(True, "Safe browser message composer focused.", f"{front_app} {url}", safety_path="browser_dom")
-            if allow_pointer_fallback:
-                return _pointer_message_target()
-            return SafeTextEntryResult(False, "I do not see a safe message composer focused. Click the message box and try again.")
-        return SafeTextEntryResult(True, "Safe browser text field focused.", f"{front_app} {url}", safety_path="browser_dom")
+    os_name = _actual_os()
+    if os_name == "mac":
+        dom_info = _browser_dom_focus_info()
+        front_app = str(dom_info.get("frontApp", "")).strip()
+        dom = dom_info.get("dom") or {}
+        if _matches_name(front_app, BROWSER_APPS) and dom.get("ok") and _dom_textish(dom):
+            label = " ".join(str(dom.get(k, "")) for k in ("label", "role", "tag"))
+            url = str(dom_info.get("url") or dom.get("url") or "")
+            if _contains_any(label, ADDRESS_LABEL_MARKERS):
+                return SafeTextEntryResult(False, "I will not type because the browser address/search bar appears to be focused.")
+            if purpose_key == "message":
+                if _dom_message_composer(dom_info):
+                    return SafeTextEntryResult(True, "Safe browser message composer focused.", f"{front_app} {url}", safety_path="browser_dom")
+                if allow_pointer_fallback:
+                    return _pointer_message_target()
+                return SafeTextEntryResult(False, "I do not see a safe message composer focused. I will locate and focus the message field before typing.")
+            return SafeTextEntryResult(True, "Safe browser text field focused.", f"{front_app} {url}", safety_path="browser_dom")
 
     ax = _accessibility_focus_info()
     front_app = str(ax.get("frontApp", "")).strip()
@@ -539,20 +687,20 @@ def validate_safe_text_target(purpose: str = "generic", allow_pointer_fallback: 
     if not front_app or not role:
         if purpose_key == "message" and allow_pointer_fallback:
             return _pointer_message_target()
-        return SafeTextEntryResult(False, "I cannot verify a safe focused text field. Click the text box and try again.")
-    if front_app in UNSAFE_TYPING_APPS:
+        return SafeTextEntryResult(False, "I cannot verify a focused text field. I will locate and focus the requested field before typing.")
+    if _is_unsafe_typing_app(front_app):
         return SafeTextEntryResult(False, f"I will not type into {front_app}; that app is blocked for safety.")
     if role not in TEXT_ROLES:
-        return SafeTextEntryResult(False, "I do not see a safe text field focused. Click the text box and try again.")
+        return SafeTextEntryResult(False, "I do not see a text field focused. I will locate and focus the requested field before typing.")
     if _contains_any(label, ADDRESS_LABEL_MARKERS):
         return SafeTextEntryResult(False, "I will not type because an address/search field appears to be focused.")
 
     if purpose_key == "message":
-        if front_app in MESSAGING_APPS or _contains_any(label, MESSAGE_LABEL_MARKERS):
+        if _is_messaging_app(front_app) or _contains_any(label, MESSAGE_LABEL_MARKERS):
             return SafeTextEntryResult(True, "Safe message field focused.", f"{front_app} {role}", safety_path="accessibility")
         if allow_pointer_fallback:
             return _pointer_message_target()
-        return SafeTextEntryResult(False, "I do not see a safe message composer focused. Click the message box and try again.")
+        return SafeTextEntryResult(False, "I do not see a message composer focused. I will locate and focus the message field before typing.")
 
     return SafeTextEntryResult(True, "Safe text field focused.", f"{front_app} {role}", safety_path="accessibility")
 
@@ -599,10 +747,10 @@ def safe_type_text(
             clicked_app = _frontmost_app_name()
             if clicked_app in UNSAFE_TYPING_APPS:
                 return SafeTextEntryResult(False, f"I will not type into {clicked_app}; that app is blocked for safety.")
-            if purpose == "message" and clicked_app and clicked_app not in SAFE_POINTER_MESSAGE_APPS:
+            if purpose == "message" and not _matches_name(clicked_app, SAFE_POINTER_MESSAGE_APPS):
                 return SafeTextEntryResult(
                     False,
-                    f"I clicked the pointer location, but {clicked_app} is not a supported messaging target.",
+                    f"I clicked the pointer location, but {clicked_app or 'the active app'} is not a supported messaging target.",
                 )
 
         if clear_first:
