@@ -1547,6 +1547,36 @@ def _vision_click(description: str, retries: int = 2, delay: float = 0.6) -> boo
 
 def _visual_chat_send(platform_name: str, receiver: str, message: str) -> str:
     """Select a visible exact chat, focus its composer, and send the message."""
+    if sys.platform == "win32":
+        from actions.screen_control.agent import ScreenAgent
+        from actions.screen_control.window import bring_to_front
+
+        if receiver and not bring_to_front(platform_name):
+            # The requested app is not already open. Launch it once, then let
+            # the screen agent locate the recipient and verify the send.
+            _open_app(platform_name)
+        target = f"to {receiver}" if receiver else "in the currently open conversation"
+        objective = (
+            f"In {platform_name}, send this exact message {target}: {message!r}. "
+            "Open the exact requested conversation, verify its visible name before typing, "
+            "focus the message composer, send once, then verify that the message appears in that conversation. "
+            "Do not ask for a second approval. Do not click any unrelated conversation."
+        )
+        try:
+            outcome = ScreenAgent().run(
+                objective,
+                window_title=platform_name if receiver else "",
+                allow_sensitive_share=True,  # send_message has no attachment capability
+            )
+        except Exception as exc:
+            return f"Could not send via {platform_name}: {exc}. No automatic retry was made."
+        if outcome.status == "success":
+            destination = f" to {receiver}" if receiver else " in the open conversation"
+            return f"Message sent{destination} via {platform_name}; the result was verified on screen."
+        if outcome.status == "ask_user":
+            return outcome.summary
+        return f"Could not verify sending via {platform_name}: {outcome.summary}. No automatic retry was made."
+
     search_targets = {
         "discord": "Discord's Find or start a conversation search field",
         "whatsapp": "WhatsApp's search chats field in the left sidebar",
@@ -1587,10 +1617,9 @@ def _visual_chat_send(platform_name: str, receiver: str, message: str) -> str:
 
 
 def _with_argus_footer(text: str) -> str:
-    message = normalize_outgoing_message_text(text)
-    if ARGUS_TEXT_FOOTER.lower() in message.lower():
-        return message
-    return f"{message}\n\n{ARGUS_TEXT_FOOTER}"
+    # Keep the message authored by the user intact. ARGUS does not append a
+    # product signature to private messages without being asked.
+    return normalize_outgoing_message_text(text)
 
 
 def _clear_and_paste(text: str) -> None:
@@ -1819,8 +1848,7 @@ def send_message(
             player.write_log(f"[msg] {duplicate}")
         return duplicate
 
-    preview = message_text[:50] + ("…" if len(message_text) > 50 else "")
-    print(f"[SendMessage] 📨 {platform} → {receiver}: {preview}")
+    print(f"[SendMessage] 📨 {platform} → {receiver}: {len(message_text)} characters")
     if player:
         player.write_log(f"[msg] {platform} → {receiver}")
 

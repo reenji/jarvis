@@ -1,0 +1,165 @@
+from __future__ import annotations
+
+import tempfile
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+
+from actions.screen_control.actions import to_absolute, ActionResult
+from actions.screen_control.agent import ScreenAgent
+from actions.screen_control.capture import Capture
+from actions.screen_control.config import ScreenConfig
+from actions.screen_control.schemas import ActionType, ScreenAction
+from actions.screen_control.safety import sensitive_file_reason
+from actions.screen_control.window import WindowInfo
+from actions.screen_control.agent import _share_intent
+
+
+def _capture(*, left=0, top=0, source_width=1000, source_height=600, scale=1.0):
+    width = round(source_width * scale)
+    height = round(source_height * scale)
+    window = WindowInfo("Discord", "discord.exe", left, top, source_width, source_height, 42)
+    return Capture(b"same screenshot", width, height, source_width, source_height, left, top, scale, 0.0, window)
+
+
+@pytest.mark.parametrize(
+    ("source_width", "source_height", "scale", "origin", "point", "expected"),
+    [
+        (1000, 600, 1.0, (0, 0), (500, 500), (500, 300)),
+        (1250, 750, 0.8, (20, 40), (500, 500), (644, 414)),
+        (1500, 900, 0.6666667, (-1920, 100), (500, 500), (-1170, 550)),
+    ],
+)
+def test_normalized_coordinates_use_source_pixels_and_window_origin(
+    source_width, source_height, scale, origin, point, expected
+):
+    capture = _capture(
+        left=origin[0], top=origin[1], source_width=source_width,
+        source_height=source_height, scale=scale,
+    )
+    assert to_absolute(*point, capture) == expected
+
+
+def test_screen_action_schema_rejects_bad_coordinates_and_unknown_actions():
+    with pytest.raises(ValueError, match="entre 0 e 1000"):
+        ScreenAction.from_json({"action": "click", "x": 1001, "y": 20})
+    with pytest.raises(ValueError, match="desconhecida"):
+        ScreenAction.from_json({"action": "launch"})
+
+
+def test_screen_action_schema_parses_one_valid_action():
+    action = ScreenAction.from_json(
+        '{"action":"click","x":500,"y":250,"target_description":"Mike"}'
+    )
+    assert action.action is ActionType.CLICK
+    assert action.target_description == "Mike"
+
+
+def test_sensitive_file_detection_covers_env_docker_and_secret_contents():
+    assert "ambiente" in sensitive_file_reason("C:/project/.env")
+    assert "configuração operacional" in sensitive_file_reason("docker-compose.yml")
+    with tempfile.TemporaryDirectory() as directory:
+        path = Path(directory) / "settings.txt"
+        path.write_text("ARGUS_API_KEY=not-for-sharing", encoding="utf-8")
+        result = sensitive_file_reason(str(path))
+        assert result and "credencial" in result
+        assert "not-for-sharing" not in result
+
+
+def test_file_confirmation_policy_only_triggers_for_file_sharing():
+    assert _share_intent("Compartilhe o arquivo docker-compose.yml com a equipe")
+    assert not _share_intent("Compartilhe minha tela do Discord com a equipe")
+
+
+class _NoopAbort:
+    aborted = False
+
+    def start(self):
+        pass
+
+    def stop(self):
+        pass
+
+
+def test_screen_agent_verifies_success_after_two_observations():
+    capture = _capture()
+    agent = ScreenAgent(
+        config=ScreenConfig(max_steps=4, max_seconds=10, settle_delay=0.1),
+        abort_controller=_NoopAbort(),
+    )
+    click = ScreenAction(ActionType.CLICK, target_description="Mike", x=300, y=400)
+    done = ScreenAction(ActionType.DONE, summary="A conversa com Mike está aberta.")
+    with (
+        patch("actions.screen_control.agent.capture_active_window", return_value=capture),
+        patch("actions.screen_control.agent.describe_controls", return_value=[]),
+        patch("actions.screen_control.agent.decide_next_action", side_effect=[click, done]),
+        patch("actions.screen_control.agent.execute", return_value=ActionResult(True, "clicked", 0.01)),
+    ):
+        result = agent.run("Abra a conversa com Mike")
+    assert result.status == "success"
+    assert result.steps_taken == 1
+    assert "Mike" in result.summary
+
+
+def test_screen_agent_stops_repeating_an_unchanged_click():
+    capture = _capture()
+    agent = ScreenAgent(
+        config=ScreenConfig(max_steps=8, max_seconds=10, settle_delay=0.1),
+        abort_controller=_NoopAbort(),
+    )
+    click = ScreenAction(ActionType.CLICK, target_description="Mike", x=300, y=400)
+    with (
+        patch("actions.screen_control.agent.capture_active_window", return_value=capture),
+        patch("actions.screen_control.agent.describe_controls", return_value=[]),
+        patch("actions.screen_control.agent.decide_next_action", side_effect=[click, click, click]),
+        patch("actions.screen_control.agent.execute", return_value=ActionResult(True, "clicked", 0.01)),
+    ):
+        result = agent.run("Abra a conversa com Mike")
+    assert result.status == "fail"
+    assert "três tentativas" in result.summary
+    assert result.steps_taken == 3
+
+
+def test_sensitive_file_share_is_held_before_any_action():
+    capture = _capture()
+    agent = ScreenAgent(
+        config=ScreenConfig(max_steps=4, max_seconds=10),
+        abort_controller=_NoopAbort(),
+    )
+    with (
+        patch("actions.screen_control.agent.capture_active_window", return_value=capture),
+        patch("actions.screen_control.agent.describe_controls", return_value=[]),
+        patch("actions.screen_control.agent.decide_next_action") as decide,
+    ):
+        result = agent.run("Compartilhe C:\\workspace\\service\\.env com a equipe")
+    assert result.status == "ask_user"
+    assert "confirma" in result.summary.casefold()
+    decide.assert_not_called()
+
+
+def test_screen_tool_registry_exposes_local_screen_control():
+    from tools.registry import registry
+
+    declarations = registry.declarations()
+    tool = next(item for item in declarations if item["name"] == "screen_control")
+    assert tool["parameters"]["properties"]["action"]["enum"] == ["inspect", "act"]
+
+
+def test_windows_message_flow_uses_screen_agent_and_reports_verified_send():
+    import actions.send_message as send_message
+    from actions.screen_control.agent import ScreenRunResult
+
+    outcome = ScreenRunResult("success", "A mensagem aparece na conversa.", 4, "screen-run")
+    with (
+        patch.object(send_message.sys, "platform", "win32"),
+        patch("actions.screen_control.window.bring_to_front", return_value=True),
+        patch("actions.screen_control.agent.ScreenAgent") as agent_type,
+    ):
+        agent_type.return_value.run.return_value = outcome
+        result = send_message._visual_chat_send("Discord", "Mike", "Te vejo às 18h.")
+
+    assert "verified on screen" in result
+    call = agent_type.return_value.run.call_args
+    assert call.kwargs["allow_sensitive_share"] is True
+    assert "Discord" in call.args[0] and "Mike" in call.args[0] and "Te vejo às 18h." in call.args[0]

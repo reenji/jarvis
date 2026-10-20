@@ -136,13 +136,13 @@ def automated(_args) -> int:
     unit_covered = {
         "agent_task", "browser_control", "email_control", "file_controller", "file_processor",
         "deep_research", "flight_finder", "graphics_quality", "argus_ui_control", "open_app",
-        "media_control", "reminder", "save_memory", "screen_process", "send_message",
+        "media_control", "reminder", "save_memory", "screen_control", "screen_process", "send_message",
         "task_status", "weather_report", "web_search", "youtube_video",
     }
     safety_covered = {
         "browser_control", "code_helper", "computer_control", "computer_settings",
         "desktop_control", "dev_agent", "game_updater", "prepare_message_reply",
-        "email_control", "media_control", "reminder", "send_message",
+        "email_control", "media_control", "reminder", "screen_control", "send_message",
     }
     report.metadata["tool_coverage"] = {}
     for name in declared_tools(ROOT / "main.py"):

@@ -454,6 +454,11 @@ class ActionHelperTests(unittest.TestCase):
         normalized = send_message.normalize_outgoing_message_text("hello there")
         self.assertTrue(normalized.endswith("."))
 
+    def test_private_messages_do_not_get_an_unrequested_argus_footer(self):
+        normalized = send_message._with_argus_footer("hello there")
+        self.assertEqual(normalized, "Hello there.")
+        self.assertNotIn(send_message.ARGUS_TEXT_FOOTER, normalized)
+
     def test_short_platform_alias_does_not_capture_signal(self):
         self.assertIs(send_message._resolve_platform("Signal"), send_message._send_signal)
         self.assertIs(send_message._resolve_platform("IG"), send_message._send_instagram)

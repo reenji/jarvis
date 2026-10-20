@@ -498,10 +498,10 @@ class SettingsOverlay(_OverlayBase):
             align=Qt.AlignmentFlag.AlignLeft,
         ))
         self._direct_computer_control = QCheckBox(
-            "Executar cliques e digitação sem confirmar cada ação"
+            "Permitir controle direto do mouse e teclado"
         )
         self._direct_computer_control.setAccessibleName(
-            "Executar ações do mouse e teclado sem confirmação individual"
+            "Permitir ações diretas do mouse e teclado"
         )
         self._direct_computer_control.setMinimumHeight(44)
         self._direct_computer_control.setChecked(bool(direct_computer_control_enabled))
@@ -513,8 +513,9 @@ class SettingsOverlay(_OverlayBase):
         )
         control_lay.addWidget(self._direct_computer_control)
         self._direct_computer_control_note = _lbl(
-            "Ativo por padrão. O ARGUS pode usar mouse, teclado e atalhos para concluir pedidos sem pedir autorização em cada clique. "
-            "Envios de mensagens e e-mails, além de desligar ou reiniciar o computador, continuam com suas confirmações próprias. "
+            "Ativo por padrão. Com esta opção ligada, pedidos claros são concluídos sem confirmações repetidas. "
+            "O agente visual envia capturas da janela ao Gemini e só as grava localmente com a depuração ativada. "
+            "O ARGUS pede esclarecimento se o destino estiver ambíguo e confirmação antes de compartilhar arquivos que possam expor credenciais ou configurações sensíveis. Desligar esta opção bloqueia ações diretas. "
             '<a href="https://github.com/reenji/jarvis/blob/main/docs/TERMS.md">Ler os termos do ARGUS</a>.',
             TOKENS.font_sizes["legacy_8"], color_role="TEXT_DIM",
             align=Qt.AlignmentFlag.AlignLeft,

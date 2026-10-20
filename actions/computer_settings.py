@@ -719,7 +719,8 @@ def computer_settings(
     if _is_argus_self_shutdown_request(params, action, description, value):
         return "ARGUS self-shutdown is disabled. No computer shutdown was performed."
 
-    print(f"[Settings] Action: {action}  Value: {value}  OS: {_OS}")
+    safe_value = "[redacted]" if action in {"type", "type_text", "write", "write_on_screen"} and value else value
+    print(f"[Settings] Action: {action}  Value: {safe_value}  OS: {_OS}")
     if player:
         player.write_log(f"[Settings] {action}")
 
@@ -728,12 +729,6 @@ def computer_settings(
             return (
                 f"Refusing to {action} the computer because the target was not explicit. "
                 f"Say '{action} my computer' if you intend to power-control the machine."
-            )
-        confirmed = str(params.get("confirmed", "")).lower()
-        if confirmed not in ("yes", "true", "1", "confirm"):
-            return (
-                f"This will {action} the computer. "
-                f"Please confirm by calling again with confirmed=yes."
             )
 
     if action == "volume_set":
