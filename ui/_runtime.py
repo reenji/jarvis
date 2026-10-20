@@ -43,6 +43,9 @@ from .first_run import (
     _write_intro_timing_cache,
 )
 from core.api_key_validator import ApiKeyValidationResult
+from core.computer_control_preferences import (
+    load_direct_computer_control, save_direct_computer_control,
+)
 from core.voice_preferences import (
     MAX_VAD_SILENCE_MS, MIN_VAD_SILENCE_MS, load_voice_preferences,
     normalize_response_style, normalize_silence_ms, save_voice_preferences,

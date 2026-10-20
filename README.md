@@ -45,6 +45,9 @@ then type `argus`.
 ARGUS's core UI, Gemini connection, presentations, research, files, and CLI are
 cross-platform. Some computer-control, email, media, and browser integrations
 depend on permissions and available applications on each operating system.
+O controle direto do mouse e do teclado fica ativado por padrão para que o ARGUS
+conclua ações solicitadas sem pedir confirmação para cada clique ou tecla. Ele
+pode ser desativado em **Configurações → Ações**. Leia os [termos de controle do computador](docs/TERMS.md).
 
 ## Interface previews
 
