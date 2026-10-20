@@ -27,7 +27,10 @@ def to_absolute(x_norm: int, y_norm: int, capture: Capture) -> tuple[int, int]:
     return x, y
 
 
-def _type_text(text: str, target: str, x: int | None, y: int | None, capture: Capture) -> str:
+def _type_text(
+    text: str, target: str, x: int | None, y: int | None, capture: Capture,
+    *, allow_browser_search: bool = False,
+) -> str:
     import pyautogui
 
     window = get_active_window()
@@ -44,7 +47,7 @@ def _type_text(text: str, target: str, x: int | None, y: int | None, capture: Ca
 
     # Only paste after the operating system confirms that a text control has focus.
     from actions.safe_text_entry import validate_safe_text_target
-    validation = validate_safe_text_target("generic")
+    validation = validate_safe_text_target("generic", allow_browser_search=allow_browser_search)
     if not validation.ok:
         raise RuntimeError(validation.message)
 
@@ -75,7 +78,10 @@ def _inside_capture(x: int, y: int, capture: Capture) -> bool:
     )
 
 
-def execute(action: ScreenAction, capture: Capture, *, mouse_duration: float = 0.2) -> ActionResult:
+def execute(
+    action: ScreenAction, capture: Capture, *, mouse_duration: float = 0.2,
+    allow_browser_search: bool = False,
+) -> ActionResult:
     started = time.monotonic()
     try:
         import pyautogui
@@ -87,7 +93,12 @@ def execute(action: ScreenAction, capture: Capture, *, mouse_duration: float = 0
         if action.action in {ActionType.CLICK, ActionType.DOUBLE_CLICK, ActionType.RIGHT_CLICK}:
             used_uia = False
             if action.target_description:
-                clicked, detail = click_control(window, action.target_description)
+                clicked, detail = click_control(
+                    window,
+                    action.target_description,
+                    button="right" if action.action == ActionType.RIGHT_CLICK else "left",
+                    double=action.action == ActionType.DOUBLE_CLICK,
+                )
                 if clicked:
                     used_uia = True
                 elif detail == "ambiguous" and (action.x is None or action.y is None):
@@ -106,7 +117,10 @@ def execute(action: ScreenAction, capture: Capture, *, mouse_duration: float = 0
         elif action.action == ActionType.TYPE_TEXT:
             if not action.text:
                 raise RuntimeError("A ação de digitar veio sem texto.")
-            detail = _type_text(action.text, action.target_description, action.x, action.y, capture)
+            detail = _type_text(
+                action.text, action.target_description, action.x, action.y, capture,
+                allow_browser_search=allow_browser_search,
+            )
             return ActionResult(True, detail, time.monotonic() - started)
 
         elif action.action == ActionType.PRESS_KEY:
@@ -120,6 +134,14 @@ def execute(action: ScreenAction, capture: Capture, *, mouse_duration: float = 0
             pyautogui.hotkey(*action.keys)
 
         elif action.action == ActionType.SCROLL:
+            if action.x is not None and action.y is not None:
+                x, y = to_absolute(action.x, action.y, capture)
+            else:
+                x = capture.origin_x + capture.source_width // 2
+                y = capture.origin_y + capture.source_height // 2
+            if not _inside_capture(x, y, capture):
+                raise RuntimeError("O ponto de rolagem indicado está fora da janela em foco.")
+            pyautogui.moveTo(x, y, duration=mouse_duration)
             pyautogui.scroll(action.scroll_amount)
 
         elif action.action == ActionType.DRAG:

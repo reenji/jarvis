@@ -80,23 +80,59 @@ def bring_to_front(title_or_process: str) -> bool:
         import win32con
         import psutil
 
-        matches: list[int] = []
+        matches: list[tuple[int, int]] = []
         def collect(handle: int, _extra) -> None:
             if not win32gui.IsWindowVisible(handle):
                 return
-            title = str(win32gui.GetWindowText(handle) or "").casefold()
+            title = str(win32gui.GetWindowText(handle) or "").strip().casefold()
             try:
                 _, pid = __import__("win32process").GetWindowThreadProcessId(handle)
                 process = psutil.Process(pid).name().casefold()
             except Exception:
                 process = ""
-            if target in title or target in process:
-                matches.append(handle)
+            if process == "argus.exe" or "argus" in title:
+                return
+            process_stem = process.removesuffix(".exe")
+            target_stem = target.removesuffix(".exe")
+            aliases = {
+                "google chrome": {"chrome"},
+                "microsoft edge": {"msedge", "edge"},
+                "visual studio code": {"code"},
+                "microsoft teams": {"teams", "msteams"},
+                "file explorer": {"explorer"},
+            }
+            exact_process = process_stem == target_stem or process_stem in aliases.get(target_stem, set())
+            exact_title = title == target
+            if exact_process or exact_title or target in title or target in process:
+                # Prefer an exact title/process match over a substring match.
+                rank = 0 if exact_title or exact_process else 1
+                matches.append((rank, handle))
         win32gui.EnumWindows(collect, None)
         if not matches:
             return False
-        win32gui.ShowWindow(matches[0], win32con.SW_RESTORE)
-        win32gui.SetForegroundWindow(matches[0])
-        return True
+        matches.sort(key=lambda row: row[0])
+        current_thread = __import__("win32api").GetCurrentThreadId()
+        user32 = ctypes.windll.user32
+        for _, handle in matches:
+            foreground = int(win32gui.GetForegroundWindow() or 0)
+            target_thread, _ = __import__("win32process").GetWindowThreadProcessId(handle)
+            foreground_thread = (
+                __import__("win32process").GetWindowThreadProcessId(foreground)[0]
+                if foreground else 0
+            )
+            attached: list[int] = []
+            try:
+                for thread_id in {target_thread, foreground_thread} - {0, current_thread}:
+                    if user32.AttachThreadInput(current_thread, thread_id, True):
+                        attached.append(thread_id)
+                win32gui.ShowWindow(handle, win32con.SW_RESTORE)
+                win32gui.BringWindowToTop(handle)
+                win32gui.SetForegroundWindow(handle)
+                if int(win32gui.GetForegroundWindow() or 0) == handle:
+                    return True
+            finally:
+                for thread_id in attached:
+                    user32.AttachThreadInput(current_thread, thread_id, False)
+        return False
     except Exception:
         return False

@@ -10,7 +10,7 @@ declaration: dict[str, Any] = {
     "description": (
         "Inspect the focused desktop app or complete a multi-step task in its visible interface. "
         "Use action=inspect only when asked what is on screen. Use action=act for any requested on-screen interaction. "
-        "If the requested app is not open, provide its name in window_title; ARGUS opens it, focuses its window, "
+        "If the requested app is not open, provide its name in window_title; if omitted, infer a common app named in the goal. ARGUS opens it, confirms focus, "
         "then uses Windows accessibility controls first and visual targeting when needed and verifies each step. "
         "Follow the user's explicit request without asking for per-click or per-message confirmation. "
         "Ask only if the target is genuinely ambiguous or if a file about to be shared appears to contain secrets or sensitive configuration."
@@ -20,7 +20,7 @@ declaration: dict[str, Any] = {
         "properties": {
             "action": {"type": "STRING", "enum": ["inspect", "act"], "description": "inspect describes the focused window; act completes the user's visible UI request."},
             "objective": {"type": "STRING", "description": "The complete user-authorized task, including app, target, and exact text if relevant."},
-            "window_title": {"type": "STRING", "description": "App name or window title to focus before acting; if the app is closed, ARGUS opens it and then waits for its window."},
+            "window_title": {"type": "STRING", "description": "App name or window title to focus before acting; if omitted, ARGUS infers common app names from the objective. If the app is closed, ARGUS opens it and waits for its window."},
         },
         "required": ["action"],
     },
