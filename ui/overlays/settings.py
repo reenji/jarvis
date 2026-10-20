@@ -162,6 +162,8 @@ class SettingsOverlay(_OverlayBase):
     """Unified settings panel for identity, theme, and graphics."""
 
     voice_changed = pyqtSignal(str, str, str)  # provider, voice_id, api_key
+    voice_selector_requested = pyqtSignal()
+    voice_preferences_changed = pyqtSignal(str, int)
     name_changed = pyqtSignal(str)
     theme_changed = pyqtSignal(str)
     graphics_changed = pyqtSignal(str)
@@ -171,7 +173,8 @@ class SettingsOverlay(_OverlayBase):
     tour_replay_requested = pyqtSignal()
 
     def __init__(self, parent=None, current_name: str = "",
-                 current_voice: str = "puck", current_theme: str = "arc_reactor",
+                 current_voice: str = "puck", current_response_style: str = "balanced",
+                 current_vad_silence_ms: int = 700, current_theme: str = "arc_reactor",
                  current_graphics: str = "medium", current_graphics_mode: str = "manual",
                  replay_intro: bool = False,
                  current_motion_preference: str = "system"):
@@ -226,7 +229,7 @@ class SettingsOverlay(_OverlayBase):
         tb_lay.setSpacing(TOKENS.spacing["legacy_4"])
 
         self._s_tabs: list[QPushButton] = []
-        self._s_tab_names = ["Identidade", "Tema", "Gráficos"]
+        self._s_tab_names = ["Identidade", "Voz", "Tema", "Gráficos"]
         self._s_active_tab = 0
 
         for i, name in enumerate(self._s_tab_names):
@@ -324,7 +327,80 @@ class SettingsOverlay(_OverlayBase):
 
         self._s_stack.addWidget(id_page)
 
-        # Page 1: Theme
+        # Page 1: speech output and microphone turn-taking preferences.
+        voice_page = QWidget()
+        voice_page.setStyleSheet("background: transparent;")
+        voice_lay = QVBoxLayout(voice_page)
+        voice_lay.setContentsMargins(TOKENS.spacing["legacy_4"], TOKENS.spacing["legacy_8"], TOKENS.spacing["legacy_4"], TOKENS.spacing["legacy_4"])
+        voice_lay.setSpacing(TOKENS.spacing["legacy_8"])
+
+        voice_lay.addWidget(_lbl(
+            "Voz do ARGUS", TOKENS.font_sizes["legacy_9"], bold=True,
+            align=Qt.AlignmentFlag.AlignLeft,
+        ))
+        self._voice_select_button = QPushButton(
+            f"Trocar voz · {VOICE_VALUE_TO_LABEL.get(str(current_voice).lower(), str(current_voice).title())}"
+        )
+        self._voice_select_button.setAccessibleName("Trocar voz do ARGUS")
+        self._voice_select_button.setMinimumHeight(42)
+        self._voice_select_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._voice_select_button.clicked.connect(self.voice_selector_requested.emit)
+        voice_lay.addWidget(self._voice_select_button)
+
+        voice_lay.addWidget(_lbl(
+            "Estilo das respostas faladas", TOKENS.font_sizes["legacy_8"], color_role="TEXT_DIM",
+            align=Qt.AlignmentFlag.AlignLeft,
+        ))
+        self._response_style_combo = QComboBox()
+        self._response_style_combo.setAccessibleName("Estilo das respostas faladas")
+        self._response_style_combo.setMinimumHeight(42)
+        for label, value in (
+            ("Mais concisas", "concise"),
+            ("Equilibradas", "balanced"),
+            ("Mais detalhadas", "detailed"),
+        ):
+            self._response_style_combo.addItem(label, value)
+        style_index = self._response_style_combo.findData(normalize_response_style(current_response_style))
+        self._response_style_combo.setCurrentIndex(max(0, style_index))
+        self._response_style_combo.currentIndexChanged.connect(self._emit_voice_preferences)
+        voice_lay.addWidget(self._response_style_combo)
+
+        voice_lay.addWidget(_lbl(
+            "Pausa para entender quando você terminou de falar",
+            TOKENS.font_sizes["legacy_8"], color_role="TEXT_DIM",
+            align=Qt.AlignmentFlag.AlignLeft,
+        ))
+        self._vad_silence_slider = QSlider(Qt.Orientation.Horizontal)
+        self._vad_silence_slider.setAccessibleName("Pausa para detectar fim da fala")
+        self._vad_silence_slider.setRange(MIN_VAD_SILENCE_MS, MAX_VAD_SILENCE_MS)
+        self._vad_silence_slider.setSingleStep(50)
+        self._vad_silence_slider.setPageStep(100)
+        self._vad_silence_slider.setTickInterval(100)
+        self._vad_silence_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
+        self._vad_silence_slider.setValue(normalize_silence_ms(current_vad_silence_ms))
+        voice_lay.addWidget(self._vad_silence_slider)
+        self._vad_silence_label = QLabel("")
+        self._vad_silence_label.setAccessibleName("Pausa selecionada")
+        self._vad_silence_label.setStyleSheet(f"color: {C.PRI}; background: transparent;")
+        voice_lay.addWidget(self._vad_silence_label)
+        self._vad_silence_note = _lbl(
+            "Uma pausa maior evita interromper frases; também pode aumentar um pouco o tempo de resposta.",
+            TOKENS.font_sizes["legacy_7"], color_role="TEXT_DIM", align=Qt.AlignmentFlag.AlignLeft,
+        )
+        self._vad_silence_note.setWordWrap(True)
+        voice_lay.addWidget(self._vad_silence_note)
+        self._voice_silence_timer = QTimer(self)
+        self._voice_silence_timer.setSingleShot(True)
+        self._voice_silence_timer.setInterval(400)
+        self._voice_silence_timer.timeout.connect(self._emit_voice_preferences)
+        self._vad_silence_slider.valueChanged.connect(self._update_vad_silence_label)
+        self._vad_silence_slider.valueChanged.connect(lambda _value: self._voice_silence_timer.start())
+        self._vad_silence_slider.sliderReleased.connect(self._apply_vad_silence_now)
+        self._update_vad_silence_label(self._vad_silence_slider.value())
+        voice_lay.addStretch()
+        self._s_stack.addWidget(voice_page)
+
+        # Page 2: Theme
         th_page = QWidget()
         th_page.setStyleSheet("background: transparent;")
         th_lay = QVBoxLayout(th_page)
@@ -355,7 +431,7 @@ class SettingsOverlay(_OverlayBase):
         th_lay.addStretch()
         self._s_stack.addWidget(th_page)
 
-        # Page 2: Graphics, including the device-based automatic profile.
+        # Page 3: Graphics, including the device-based automatic profile.
         gfx_page = QWidget()
         gfx_page.setStyleSheet("background: transparent;")
         gfx_lay = QVBoxLayout(gfx_page)
@@ -416,6 +492,20 @@ class SettingsOverlay(_OverlayBase):
         )
         self._setup_overlay_base(close_callback=self.hide)
         self.refresh_theme()
+
+    def _update_vad_silence_label(self, value: int):
+        seconds = f"{int(value) / 1000:.2f}".rstrip("0").rstrip(".").replace(".", ",")
+        self._vad_silence_label.setText(f"{seconds} s")
+
+    def _emit_voice_preferences(self, *_):
+        style = self._response_style_combo.currentData()
+        self.voice_preferences_changed.emit(
+            normalize_response_style(style), self._vad_silence_slider.value()
+        )
+
+    def _apply_vad_silence_now(self):
+        self._voice_silence_timer.stop()
+        self._emit_voice_preferences()
 
     def _switch_s_tab(self, idx: int):
         self._s_active_tab = idx

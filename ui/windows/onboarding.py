@@ -145,9 +145,17 @@ class _MainWindowOnboardingMixin:
         if overlay is not None:
             self._pending_greeting_enabled = overlay.replay_intro_enabled()
         completed, _saved_greeting = _load_intro_settings()
-        self._intro_should_play = (not completed) or self._pending_greeting_enabled
-        self._startup_sequence_kind = "tour" if not completed else (
-            "greeting" if self._pending_greeting_enabled else ""
+        self._skip_first_tour = bool(
+            not completed and overlay is not None and overlay.skip_first_tour_enabled()
+        )
+        self._intro_should_play = (
+            (not completed and not self._skip_first_tour)
+            or self._pending_greeting_enabled
+        )
+        self._startup_sequence_kind = (
+            "tour" if not completed and not self._skip_first_tour
+            else "greeting" if self._pending_greeting_enabled
+            else ""
         )
         verified = getattr(overlay, "_verified_key", "") if overlay is not None else ""
         if not normalized or normalized != verified:
@@ -190,6 +198,9 @@ class _MainWindowOnboardingMixin:
         cfg["os_system"] = os_name
         API_FILE.write_text(json.dumps(cfg, indent=4), encoding="utf-8")
         os.environ["GEMINI_API_KEY"] = key
+        if getattr(self, "_skip_first_tour", False):
+            # A deliberate first-run skip should not trigger the tour next launch.
+            _save_intro_settings(True, self._pending_greeting_enabled)
         self._ready = False
         self._pending_ready_after_intro = True
         self._interaction_gated = True

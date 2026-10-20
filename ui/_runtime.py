@@ -43,6 +43,10 @@ from .first_run import (
     _write_intro_timing_cache,
 )
 from core.api_key_validator import ApiKeyValidationResult
+from core.voice_preferences import (
+    MAX_VAD_SILENCE_MS, MIN_VAD_SILENCE_MS, load_voice_preferences,
+    normalize_response_style, normalize_silence_ms, save_voice_preferences,
+)
 from core.voice_catalog import (
     DEFAULT_PROVIDER, DEFAULT_VOICE_ID, EXTERNAL_PROVIDERS,
     PROVIDER_TUTORIAL, PROVIDER_VOICES,
@@ -50,7 +54,7 @@ from core.voice_catalog import (
 from PyQt6.QtWidgets import (
     QApplication, QComboBox, QCheckBox, QFormLayout, QFrame, QGraphicsOpacityEffect,
     QGroupBox, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMenu, QPushButton,
-    QScrollArea, QSizePolicy, QSpinBox, QSplitter, QStackedWidget, QSystemTrayIcon, QTextEdit,
+    QScrollArea, QSizePolicy, QSlider, QSpinBox, QSplitter, QStackedWidget, QSystemTrayIcon, QTextEdit,
     QVBoxLayout, QWidget, QProgressBar,
 )
 

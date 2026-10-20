@@ -81,6 +81,14 @@ class ArgusUI:
         self._win.on_voice_change = cb
 
     @property
+    def on_voice_preferences_change(self):
+        return self._win.on_voice_preferences_change
+
+    @on_voice_preferences_change.setter
+    def on_voice_preferences_change(self, cb):
+        self._win.on_voice_preferences_change = cb
+
+    @property
     def on_name_change(self):
         return self._win.on_name_change
 

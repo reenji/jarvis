@@ -139,6 +139,12 @@ class SetupOverlay(QWidget):
         self._replay_intro.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
         layout.addWidget(self._replay_intro)
 
+        self._skip_first_tour = QCheckBox("Pular visita guiada no primeiro uso")
+        self._skip_first_tour.setAccessibleName("Pular visita guiada no primeiro uso")
+        self._skip_first_tour.setFixedHeight(24)
+        self._skip_first_tour.setStyleSheet(f"color: {C.TEXT_MED}; background: transparent;")
+        layout.addWidget(self._skip_first_tour)
+
         layout.addSpacing(TOKENS.spacing["legacy_12"])
 
         sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
@@ -194,6 +200,9 @@ class SetupOverlay(QWidget):
 
     def replay_intro_enabled(self) -> bool:
         return self._replay_intro.isChecked()
+
+    def skip_first_tour_enabled(self) -> bool:
+        return self._skip_first_tour.isChecked()
 
     def _toggle_api_guide(self):
         expanded = not self._guide_scroll.isVisible()

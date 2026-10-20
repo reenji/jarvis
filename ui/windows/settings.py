@@ -40,10 +40,15 @@ class _MainWindowSettingsMixin:
         except Exception:
             pass
 
+        voice_preferences = load_voice_preferences(UI_SETTINGS_FILE)
+
         cw = self.centralWidget()
         ov = SettingsOverlay(
             cw,
             current_name=current_name,
+            current_voice=self._get_selected_voice(),
+            current_response_style=voice_preferences["response_style"],
+            current_vad_silence_ms=voice_preferences["vad_silence_ms"],
             current_theme=ThemeManager.current_name(),
             current_graphics=self._graphics_quality,
             current_graphics_mode=get_graphics_mode(),
@@ -63,8 +68,29 @@ class _MainWindowSettingsMixin:
         ov.motion_preference_changed.connect(self._on_motion_preference_changed)
         ov.intro_replay_changed.connect(self._on_intro_replay_changed)
         ov.tour_replay_requested.connect(self._request_manual_tour_replay)
+        ov.voice_selector_requested.connect(self._show_voice_select)
+        ov.voice_preferences_changed.connect(self._on_voice_preferences_changed)
         ov.show()
         self._settings_overlay = ov
+
+    def _on_voice_preferences_changed(self, response_style: str, vad_silence_ms: int):
+        before = load_voice_preferences(UI_SETTINGS_FILE)
+        after = save_voice_preferences(
+            path=UI_SETTINGS_FILE,
+            response_style=response_style,
+            vad_silence_ms=vad_silence_ms,
+        )
+        if after == before:
+            return
+        if self.on_voice_preferences_change:
+            try:
+                self.on_voice_preferences_change()
+            except Exception as exc:
+                self._log.append_log(f"SYS: Voice preferences callback error: {exc}")
+        if before["response_style"] != after["response_style"]:
+            self._log.append_log(f"SYS: Voice response style set to {after['response_style']}.")
+        if before["vad_silence_ms"] != after["vad_silence_ms"]:
+            self._log.append_log(f"SYS: Speech end pause set to {after['vad_silence_ms']} ms.")
 
     def _on_settings_name(self, name: str):
         if name:

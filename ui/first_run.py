@@ -17,7 +17,7 @@ from typing import Callable
 
 from PyQt6.QtCore import QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
-from PyQt6.QtWidgets import QLabel, QWidget
+from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
 
 
 INTRO_SEQUENCE_VERSION = 5
@@ -40,8 +40,8 @@ def _configure_intro_tts_renderers(
     _intro_tts_segmented_renderer = segmented_renderer
 
 _GREETING_CAPTIONS = (
-    "ARGUS online.",
-    "Your voice and text requests use the same conversation.",
+    "ARGUS está online.",
+    "Seus pedidos por voz e texto fazem parte da mesma conversa.",
 )
 
 
@@ -64,10 +64,10 @@ def _ui_symbol(name: str, default=None):
 def _daily_greeting(now: datetime | None = None) -> str:
     hour = (now or datetime.now()).hour
     if 5 <= hour < 12:
-        return "Good morning. I am ARGUS."
+        return "Bom dia. Eu sou ARGUS."
     if 12 <= hour < 18:
-        return "Good afternoon. I am ARGUS."
-    return "Good evening. I am ARGUS."
+        return "Boa tarde. Eu sou ARGUS."
+    return "Boa noite. Eu sou ARGUS."
 
 
 def _tour_chapters(now: datetime | None = None) -> tuple[IntroChapter, ...]:
@@ -437,6 +437,20 @@ class FirstRunIntroOverlay(QWidget):
         self._speech_stop = threading.Event()
         self._speech_thread: threading.Thread | None = None
 
+        self._skip_button = QPushButton("Pular introdução", self)
+        self._skip_button.setAccessibleName("Pular introdução do ARGUS")
+        self._skip_button.setMinimumSize(184, 42)
+        self._skip_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        colors = _ui_symbol("C")
+        if colors is not None:
+            self._skip_button.setStyleSheet(f"""
+                QPushButton {{ background: {colors.BG}; color: {colors.PRI};
+                    border: 1px solid {colors.PRI_DIM}; border-radius: 5px; padding: 0 14px; }}
+                QPushButton:hover {{ background: {colors.PRI_GHO}; border-color: {colors.PRI}; }}
+                QPushButton:focus {{ border: 2px solid {colors.PRI}; }}
+            """)
+        self._skip_button.clicked.connect(self.finish)
+
         self._speech_progress.connect(self._on_speech_progress)
         self._speech_finished_signal.connect(self._on_speech_finished)
         self._speech_error.connect(self._on_speech_error)
@@ -444,6 +458,13 @@ class FirstRunIntroOverlay(QWidget):
         self._timer.setInterval(40)
         self._timer.timeout.connect(self._tick)
         self._timer.start()
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._skip_button.move(
+            max(0, (self.width() - self._skip_button.width()) // 2),
+            max(0, self.height() - self._skip_button.height() - 24),
+        )
 
     @property
     def _timeline_duration(self) -> float:
