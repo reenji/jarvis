@@ -10,7 +10,7 @@ import subprocess
 import threading
 from pathlib import Path
 from typing import Optional
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 from playwright.async_api import (
     async_playwright,
@@ -36,26 +36,6 @@ def _normalize_url(url: str) -> str:
     if "." not in url:
         url = url + ".com"
     return "https://" + url
-
-
-def _user_agent() -> str:
-    if _OS == "Windows":
-        return (
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        )
-    if _OS == "Darwin":
-        return (
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-            "AppleWebKit/537.36 (KHTML, like Gecko) "
-            "Chrome/124.0.0.0 Safari/537.36"
-        )
-    return (
-        "Mozilla/5.0 (X11; Linux x86_64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    )
 
 
 def _managed_profile_dir(browser: str) -> str:
@@ -467,7 +447,6 @@ class _BrowserSession:
             "no_viewport": True,
             "args": [
                 "--start-maximized",
-                "--disable-blink-features=AutomationControlled",
                 "--no-first-run",
                 "--disable-default-apps",
                 "--no-default-browser-check",
@@ -539,9 +518,53 @@ class _BrowserSession:
             except Exception as e:
                 print(f"[Browser] New-tab retry failed: {e}")
 
+        verification = await self._google_verification_result()
+        if verification:
+            return verification
+
         if result_url and result_url not in ("about:blank", "", None):
             return f"Opened: {result_url}"
         return f"Could not open: {url}"
+
+    async def _google_verification_result(self) -> str:
+        """Detect Google's anti-automation page and stop without interacting with it."""
+        page = self._page
+        if page is None or page.is_closed():
+            return ""
+        try:
+            parsed = urlparse(page.url)
+            hostname = (parsed.hostname or "").casefold()
+            is_google = (
+                hostname == "google.com"
+                or hostname.startswith("google.")
+                or ".google." in hostname
+            )
+            if not is_google:
+                return ""
+            if "/sorry/" in parsed.path.casefold():
+                return (
+                    "O Google apresentou uma verificação anti-robô. Parei a navegação "
+                    "sem interagir com a verificação, repetir a busca ou tentar contorná-la."
+                )
+            body = await page.locator("body").inner_text(timeout=1_500)
+            lowered = body.casefold()
+            markers = (
+                "our systems have detected unusual traffic",
+                "unusual traffic from your computer network",
+                "automated queries",
+                "tráfego incomum",
+                "consultas automatizadas",
+                "i'm not a robot",
+                "i am not a robot",
+            )
+            if any(marker in lowered for marker in markers):
+                return (
+                    "O Google apresentou uma verificação anti-robô. Parei a navegação "
+                    "sem interagir com a verificação, repetir a busca ou tentar contorná-la."
+                )
+        except Exception:
+            pass
+        return ""
 
     async def search(self, query: str, engine: str = "duckduckgo") -> str:
         _engines = {

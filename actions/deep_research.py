@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Callable
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import urlparse
 
 from memory.config_manager import get_gemini_key
 
@@ -24,7 +24,7 @@ def _base_dir() -> Path:
 
 
 BASE_DIR = _base_dir()
-SYNTHESIS_MODELS = ("gemini-2.5-flash-lite", "gemini-2.5-flash")
+SYNTHESIS_MODELS = ("gemini-3.8-flash", "gemini-3.6-flash")
 
 DEPTH_CONFIG = {
     "quick": {"queries": 3, "max_sources": 10},
@@ -213,127 +213,11 @@ def _plan_queries(client, request: ResearchRequest) -> list[str]:
     return cleaned[:count]
 
 
-def _clean_search_url(url: str) -> str:
-    value = str(url or "").strip()
-    parsed = urlparse(value)
-    if "duckduckgo.com" in parsed.netloc and parsed.path.startswith("/l/"):
-        value = unquote(parse_qs(parsed.query).get("uddg", [value])[0])
-    return value
-
-
-def _duckduckgo_html_search(query: str, max_results: int) -> list[dict]:
-    import requests
-    from bs4 import BeautifulSoup
-
-    response = requests.get(
-        "https://html.duckduckgo.com/html/",
-        params={"q": query},
-        headers={"User-Agent": "Mozilla/5.0 ARGUS Research"},
-        timeout=18,
-    )
-    response.raise_for_status()
-    soup = BeautifulSoup(response.text, "html.parser")
-    results = []
-    for row in soup.select(".result"):
-        link = row.select_one(".result__a")
-        if link is None:
-            continue
-        url = _clean_search_url(link.get("href", ""))
-        if not _valid_source_url(url):
-            continue
-        snippet_node = row.select_one(".result__snippet")
-        results.append({
-            "title": " ".join(link.get_text(" ", strip=True).split()),
-            "snippet": " ".join(snippet_node.get_text(" ", strip=True).split()) if snippet_node else "",
-            "url": url,
-        })
-        if len(results) >= max_results:
-            break
-    return results
-
-
-def _bing_html_search(query: str, max_results: int) -> list[dict]:
-    import requests
-    from bs4 import BeautifulSoup
-
-    response = requests.get(
-        "https://www.bing.com/search",
-        params={"q": query, "count": max_results},
-        headers={"User-Agent": "Mozilla/5.0 ARGUS Research"},
-        timeout=18,
-    )
-    response.raise_for_status()
-    soup = BeautifulSoup(response.text, "html.parser")
-    results = []
-    for row in soup.select("li.b_algo"):
-        link = row.select_one("h2 a")
-        if link is None:
-            continue
-        url = str(link.get("href", "")).strip()
-        if not _valid_source_url(url):
-            continue
-        snippet_node = row.select_one(".b_caption p")
-        results.append({
-            "title": " ".join(link.get_text(" ", strip=True).split()),
-            "snippet": " ".join(snippet_node.get_text(" ", strip=True).split()) if snippet_node else "",
-            "url": url,
-        })
-        if len(results) >= max_results:
-            break
-    return results
-
-
-def _search_web(query: str, max_results: int = 6) -> list[dict]:
-    errors = []
-    try:
-        raw_results = _duckduckgo_html_search(query, max_results * 2)
-    except Exception as exc:
-        errors.append(f"DuckDuckGo HTML: {exc}")
-        raw_results = []
-    if not raw_results:
-        try:
-            raw_results = _bing_html_search(query, max_results * 2)
-        except Exception as exc:
-            errors.append(f"Bing HTML: {exc}")
-
-    diverse = []
-    seen_urls = set()
-    seen_domains = set()
-    overflow = []
-    for item in raw_results:
-        url = _clean_search_url(item.get("url") or item.get("href") or "")
-        if not _valid_source_url(url):
-            continue
-        normalized = url.rstrip("/").casefold()
-        if normalized in seen_urls:
-            continue
-        seen_urls.add(normalized)
-        result = {
-            "title": str(item.get("title") or urlparse(url).netloc).strip(),
-            "snippet": str(item.get("snippet") or item.get("body") or "").strip(),
-            "url": url,
-        }
-        domain = urlparse(url).netloc.casefold().removeprefix("www.")
-        if domain in seen_domains:
-            overflow.append(result)
-            continue
-        seen_domains.add(domain)
-        diverse.append(result)
-        if len(diverse) >= max_results:
-            return diverse
-    for result in overflow:
-        diverse.append(result)
-        if len(diverse) >= max_results:
-            break
-    if not diverse:
-        raise RuntimeError("; ".join(errors) or "No web results were returned.")
-    return diverse
-
-
 def _browser_result_failed(result: str) -> bool:
     lowered = str(result or "").lower()
     return any(marker in lowered for marker in (
         "could not", "error", "timed out", "unknown action", "not started", "failed",
+        "verificação anti-robô", "anti-robot verification",
     ))
 
 
@@ -345,21 +229,15 @@ def _open_visible_research(
     opened_urls: set[str] | None = None,
     cancel_flag=None,
 ) -> list[str]:
-    """Drive ARGUS's controlled browser through the query and one new source tab."""
+    """Open one new tab with a grounded source for visible research."""
     from actions.browser_control import browser_control
 
     opened_urls = opened_urls if opened_urls is not None else set()
     extracted_pages = []
     _check_cancel(cancel_flag)
-    search_result = browser_control(
-        {"action": "search", "query": query, "engine": "google"},
-        player=player,
-    )
-    if _browser_result_failed(search_result):
-        if player and hasattr(player, "write_log"):
-            player.write_log(f"deep_research: Browser search unavailable: {str(search_result)[:120]}")
-        return extracted_pages
-
+    # Search results have already come from Gemini's supported Google Search
+    # grounding API. Do not submit a second query through a browser or scrape a
+    # search-results page; visible mode only opens the cited source pages.
     for source in results:
         url = source["url"]
         key = url.rstrip("/").casefold()
@@ -389,7 +267,10 @@ def _research_query(
     opened_urls: set[str] | None = None,
     cancel_flag=None,
 ) -> tuple[str, list[dict]]:
-    results = _search_web(query, max_results=6)
+    from actions.web_search import _gemini_grounded_search
+
+    answer, results = _gemini_grounded_search(query, client=client)
+    results = results[:6]
     page_extracts = []
     if visible:
         page_extracts = _open_visible_research(
@@ -399,11 +280,14 @@ def _research_query(
             opened_urls=opened_urls,
             cancel_flag=cancel_flag,
         )
-    snippets = []
-    for item in results:
-        snippet = item.get("snippet") or "Source discovered; open the URL for full context."
-        snippets.append(f"- {item['title']}: {snippet}\n  Source: {item['url']}")
-    findings = "\n".join(snippets + page_extracts).strip()
+    source_lines = [f"- {item['title']}: {item['url']}" for item in results]
+    findings = "\n\n".join(
+        part for part in (
+            f"Google Search grounding summary:\n{answer}",
+            "Sources returned by Google Search grounding:\n" + "\n".join(source_lines) if source_lines else "",
+            "\n".join(page_extracts),
+        ) if part
+    ).strip()
     sources = [{"title": item["title"], "url": item["url"]} for item in results]
     return findings, sources
 
@@ -613,7 +497,12 @@ def build_deep_research(
 
     request = ResearchRequest.from_parameters(parameters)
     _check_cancel(cancel_flag)
-    client = genai.Client(api_key=_api_key())
+    from google.genai import types
+
+    client = genai.Client(
+        api_key=_api_key(),
+        http_options=types.HttpOptions(timeout=25_000),
+    )
     warnings = []
     _progress(progress_callback, 4, "Planning research questions")
     queries = _plan_queries(client, request)
