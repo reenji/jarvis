@@ -49,6 +49,17 @@ O controle direto do mouse e do teclado fica ativado por padrão para que o ARGU
 conclua ações solicitadas sem pedir confirmação para cada clique ou tecla. Ele
 pode ser desativado em **Configurações → Ações**. Leia os [termos de controle do computador](docs/TERMS.md).
 
+## Local document knowledge
+
+ARGUS can index a specific document or folder you name, then search it with
+file and line citations. For example, ask ARGUS to “index the folder
+`C:\\Users\\Meins\\Documents\\Project`” and then ask questions about those
+documents. Supported formats include text, Markdown, code, PDF, DOCX, and
+PPTX. Hidden files, likely credentials, and configuration files are skipped.
+The SQLite index stays under `memory/`; only short search excerpts are included
+in the active model conversation, which currently uses Gemini Live. See
+[the OpenJarvis comparison](docs/OPENJARVIS_COMPARISON.md) for scope and limits.
+
 ## Interface previews
 
 The desktop and web captures below come from the repository's UI evidence. The
