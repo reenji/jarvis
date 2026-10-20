@@ -19,13 +19,17 @@ def run(*args: str) -> None:
 
 def main() -> int:
     print("ARGUS setup — Windows / macOS / Linux")
-    if shutil.which("python3"):
-        host_python = "python3"
-    elif shutil.which("python"):
-        host_python = "python"
-    else:
-        print("Python 3.11+ is required: https://www.python.org/downloads/")
+    if sys.version_info < (3, 11):
+        print(
+            "Python 3.11+ is required. "
+            "Run this script with a supported Python interpreter: "
+            "https://www.python.org/downloads/"
+        )
         return 1
+    # Reuse the interpreter that launched this script. On Windows, `python3`
+    # may resolve to the Microsoft Store app-execution alias even when Python
+    # is already installed and this script is running successfully.
+    host_python = sys.executable
 
     if not PYTHON.exists():
         run(host_python, "-m", "venv", str(VENV))
