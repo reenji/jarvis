@@ -97,8 +97,7 @@ class _MainWindowIdentityMixin:
         if not name or not name.strip():
             # X button was pressed — don't overwrite saved name
             return
-        # Always save — "Sir" is the default when skipped
-        save_name = name.strip() if name.strip() else "Sir"
+        save_name = name.strip()
         try:
             from memory.memory_manager import update_memory
             update_memory({"identity": {"name": {"value": save_name}}})
@@ -287,6 +286,8 @@ class _MainWindowIdentityMixin:
                 break
         self._log.append_log(f"SYS: Voice → {label}  ({provider})")
         self._update_tts_btn()
+        if self._settings_overlay is not None:
+            self._settings_overlay._voice_select_button.setText(f"Trocar voz · {label}")
 
         # Keep the hidden Gemini combo in sync (used by on_voice_change callback)
         if provider == "gemini" and hasattr(self, "_voice_combo"):

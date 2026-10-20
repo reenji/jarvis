@@ -47,7 +47,7 @@ class AudioSettings(BaseSettings):
     send_sample_rate: int = 16000
     receive_sample_rate: int = 24000
     chunk_size: int = 1024
-    vad_silence_ms: int = 200
+    vad_silence_ms: int = 700
     backend: Literal["auto", "sounddevice", "dummy"] = "auto"
 
     class Config:

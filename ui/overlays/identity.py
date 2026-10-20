@@ -84,7 +84,7 @@ class NameSignInOverlay(_OverlayBase):
         confirm_btn.clicked.connect(self._submit)
         layout.addWidget(confirm_btn)
 
-        skip_btn = QPushButton("Skip — default to Sir")
+        skip_btn = QPushButton("Continuar sem nome")
         skip_btn.setFixedHeight(26)
         skip_btn.setFont(QFont(TECH_FONT, TOKENS.font_sizes["legacy_7"]))
         skip_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -95,7 +95,7 @@ class NameSignInOverlay(_OverlayBase):
             }}
             QPushButton:hover {{ color: {C.TEXT_MED}; border: 1px solid {C.BORDER_B}; }}
         """)
-        skip_btn.clicked.connect(lambda: self.done.emit("Sir"))
+        skip_btn.clicked.connect(lambda: self.done.emit(""))
         layout.addWidget(skip_btn)
 
         layout.addSpacing(TOKENS.spacing["legacy_4"])

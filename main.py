@@ -20,6 +20,12 @@ import importlib
 import time
 
 from core.live_model import pick_live_model
+from core.voice_preferences import (
+    DEFAULT_VAD_SILENCE_MS,
+    load_voice_preferences,
+    normalize_response_style,
+    normalize_silence_ms,
+)
 from core.tool_approval import (
     ToolApprovalManager,
     draft_fingerprint,
@@ -96,7 +102,7 @@ DEFAULT_VOICE_NAME   = "puck"
 
 RECEIVE_SAMPLE_RATE = 24000
 CHUNK_SIZE          = 1024
-LIVE_VAD_SILENCE_MS = 200
+LIVE_VAD_SILENCE_MS = DEFAULT_VAD_SILENCE_MS
 STARTUP_CLAPS_REQUIRED = 2
 STARTUP_CLAP_MAX_GAP_SECONDS = 4.0
 STARTUP_CLAP_COOLDOWN_SECONDS = 0.22
@@ -350,18 +356,30 @@ def _load_voice_name() -> str:
 
 
 def _load_system_prompt() -> str:
+    preferences = load_voice_preferences()
+    response_style = normalize_response_style(preferences.get("response_style"))
+    style_instructions = {
+        "concise": "Prefer short, natural spoken answers. Include only the details needed to answer or act.",
+        "balanced": "Speak naturally and lead with the answer. Include enough context to make it clear without overexplaining.",
+        "detailed": "Give fuller explanations and useful steps when the request benefits from them, while keeping the wording natural to hear aloud.",
+    }
+    voice_guidance = (
+        "\n\nVOICE AND LANGUAGE\n"
+        "Match the user's language and register; use natural Brazilian Portuguese when they speak Portuguese. "
+        "Speech recognition may mishear colloquial words, names, numbers, or dates. Use the surrounding context, "
+        "but ask one concise clarification instead of guessing details that could change an action. "
+        "Do not add honorifics or use a name unless the user chose one.\n"
+        f"Response style: {style_instructions[response_style]}"
+    )
     try:
         prompt = PROMPT_PATH.read_text(encoding="utf-8").strip()
-        return (
-            prompt
-            + "\n\nAlways address the user respectfully as 'Sir' or 'Madam' where appropriate, while remaining efficient and direct."
-        )
+        return prompt + voice_guidance
     except Exception:
         return (
-            "You are ARGUS, Tony Stark's AI assistant. "
-            "Be concise, direct, and always use the provided tools to complete tasks. "
+            "You are ARGUS, a practical personal assistant. "
+            "Be direct and use the provided tools to complete tasks. "
             "Never simulate or guess results — always call the appropriate tool. "
-            "Always address the user respectfully as 'Sir' or 'Madam' where appropriate, while remaining efficient and direct."
+            + voice_guidance
         )
 
 _CTRL_RE = re.compile(r"<ctrl\d+>", re.IGNORECASE)
@@ -1272,7 +1290,7 @@ class ArgusLive:
     def speak_error(self, tool_name: str, error: str):
         short = str(error)[:120]
         self.ui.write_log(f"ERR: {tool_name} — {short}")
-        self.speak(f"Sir, {tool_name} encountered an error. {short}")
+        self.speak(f"Houve um problema em {tool_name}. {short}")
 
     @staticmethod
     def _is_explicit_self_quit_transcript(text: str) -> bool:
@@ -1488,6 +1506,14 @@ class ArgusLive:
             except Exception as e:
                 print(f"[ARGUS] ⚠️ Could not close session after voice change: {e}")
 
+    def update_voice_preferences(self):
+        self.ui.write_log("SYS: Voice preferences changed; refreshing the live session.")
+        if self.session and self._loop:
+            try:
+                asyncio.run_coroutine_threadsafe(self.session.close(), self._loop)
+            except Exception as e:
+                print(f"[ARGUS] ⚠️ Could not refresh session after voice preference change: {e}")
+
     def _get_current_voice(self) -> str:
         if getattr(self, "voice_name", None):
             return _normalize_voice_name(self.voice_name)
@@ -1512,10 +1538,10 @@ class ArgusLive:
                 name = name_entry.get("value")
             elif isinstance(name_entry, str):
                 name = name_entry
-            if name:
-                greeting = f"Argus. At your service, {name}. What would you like to accomplish today?"
+            if name and str(name).strip().lower() not in {"sir", "madam"}:
+                greeting = f"Argus pronto, {name}. Como posso ajudar?"
             else:
-                greeting = "Argus. At your service, Sir or Madam. What would you like to accomplish today?"
+                greeting = "Argus pronto. Como posso ajudar?"
             await self.session.send_client_content(
                 turns={"parts": [{"text": greeting}]},
                 turn_complete=True,
@@ -1526,7 +1552,17 @@ class ArgusLive:
     def _build_config(self) -> types.LiveConnectConfig:
         from datetime import datetime
 
+        preferences = load_voice_preferences()
+        silence_ms = normalize_silence_ms(preferences.get("vad_silence_ms", LIVE_VAD_SILENCE_MS))
         memory     = load_memory()
+        identity = memory.get("identity", {}) if isinstance(memory, dict) else {}
+        saved_name = identity.get("name") if isinstance(identity, dict) else None
+        if isinstance(saved_name, dict):
+            saved_name = saved_name.get("value")
+        if isinstance(saved_name, str) and saved_name.strip().lower() in {"sir", "madam"}:
+            memory = dict(memory)
+            memory["identity"] = dict(identity)
+            memory["identity"].pop("name", None)
         mem_str    = format_memory_for_prompt(memory)
         sys_prompt = _load_system_prompt()
 
@@ -1559,7 +1595,7 @@ class ArgusLive:
                 automatic_activity_detection=types.AutomaticActivityDetection(
                     start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
                     end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
-                    silence_duration_ms=LIVE_VAD_SILENCE_MS,
+                    silence_duration_ms=silence_ms,
                 )
             ),
             thinking_config=types.ThinkingConfig(thinking_budget=0),
@@ -2226,6 +2262,7 @@ def main():
             argus.required_unlock_path = mount_path
             argus.ui.write_log(f"SYS: Locked volume required: {mount_path}")
         ui.on_voice_change = argus.update_voice
+        ui.on_voice_preferences_change = argus.update_voice_preferences
         def _on_tts_change(provider, api_key, voice_id):
             if provider == "gemini":
                 argus._tts_engine = None
