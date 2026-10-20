@@ -8,7 +8,7 @@ Status: **PASS on the available Linux host.** The F6 shell-launch and dispatcher
 - `actions/dev_agent.py` opens VS Code with `shell=False`. On Windows it resolves a real `Code.exe` instead of passing a `.cmd` or `.bat` launcher together with a project path.
 - `actions/computer_settings.py` replaces both xrandr pipelines with argument-list calls and parses display/brightness values in Python.
 - `core/tool_approval.py` adds volatile, one-use approvals bound to a completed later user turn, the exact tool arguments or pending-draft fingerprint, and a five-minute expiry. A same-turn model tool call or changed operation/draft cannot consume the approval.
-- `main.py` enforces this boundary for mutating `computer_control`, `dev_agent`, computer restart/shutdown, email send approval, and message approval. A direct message bypasses the extra confirmation only if the current transcript contains the platform, recipient, send intent, and verbatim message body.
+- `main.py` applies the user's direct-control preference to mutating `computer_control` calls (enabled by default), while keeping later-turn approval for `dev_agent`, computer restart/shutdown, email send approval, and message approval. A direct message bypasses the extra confirmation only if the current transcript contains the platform, recipient, send intent, and verbatim message body.
 - `agent/executor.py` blocks delegated plans from bypassing the live dispatcher for those sensitive actions. The planner prompt documents the same restriction.
 - Tool declarations and `core/prompt.txt` explain the later-turn approval behavior and the explicit computer target required for power actions.
 
@@ -27,6 +27,8 @@ After F0–F7 merged, GitHub Actions run [36995251714](https://github.com/anonym
 The workflow now installs `libportaudio2`, `libegl1`, and `xvfb`, and runs the Python suite under `xvfb-run`. The local host does not have `xvfb-run`; the full pytest suite passed against its existing display. The F8 GitHub Actions run passed both jobs: frontend and backend; backend reported **318 passed, 2 warnings**. [Run 36995955613](https://github.com/anonymandk/argus/actions/runs/36995955613).
 
 ## Limits
+
+- Direct mouse and keyboard actions no longer require a separate confirmation for each input when the default-enabled preference is on. Users can turn it off in **Settings → Actions**; live input was not exercised by the checks above.
 
 - Native Windows/macOS execution was unavailable. Windows URI and process behavior was covered with mocks on Linux; physical Windows and macOS validation remains outstanding.
 - Approval uses recognized user-turn text and does not authenticate the speaker. A source that can inject recognized audio is indistinguishable from a person speaking to ARGUS; deployments needing stronger assurance should bind confirmation to a trusted UI or physical-presence signal.

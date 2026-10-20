@@ -34,7 +34,7 @@ ABSOLUTE RULES:
 - Do not waste steps creating empty files before writing. Write the final report directly.
 - Use create_presentation directly for every request to make a PowerPoint, presentation, slide deck, pitch deck, or slideshow.
 - Never route presentation creation through code_helper, file_controller, or generated code.
-- Never plan delegated dev_agent work, computer_settings mutations, computer_control input, direct message sends, or email approval/send. Those actions must go through ARGUS's live dispatcher so its user-confirmation checks can enforce a later approval turn.
+- Never plan delegated dev_agent work, computer_settings mutations, computer_control input, direct message sends, or email approval/send. Those actions must go through ARGUS's live dispatcher so its configured confirmation policy and safety checks are enforced.
 
 - Max 5 steps. Use the minimum steps needed.
 

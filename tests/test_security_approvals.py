@@ -150,9 +150,12 @@ class LiveDispatchApprovalTests(unittest.TestCase):
             self.assertEqual(second.response["result"], "project created")
             build.assert_called_once()
 
-    def test_computer_control_mutation_is_queued_before_dispatch(self):
+    def test_computer_control_mutation_is_queued_when_direct_control_is_disabled(self):
         args = {"action": "type", "text": "hello"}
-        with patch.object(self.main, "computer_control", return_value="typed") as control:
+        with (
+            patch.object(self.main, "load_direct_computer_control", return_value=False),
+            patch.object(self.main, "computer_control", return_value="typed") as control,
+        ):
             first = asyncio.run(self.argus._execute_tool(self._call("computer_control", args)))
             control.assert_not_called()
             self.assertIn("No action was performed", first.response["result"])

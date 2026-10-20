@@ -20,6 +20,7 @@ import importlib
 import time
 
 from core.live_model import pick_live_model
+from core.computer_control_preferences import load_direct_computer_control
 from core.voice_preferences import (
     DEFAULT_VAD_SILENCE_MS,
     load_voice_preferences,
@@ -733,7 +734,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "computer_control",
-        "description": "Direct computer control: type, click, hotkeys, scroll, move mouse, screenshots, find elements on screen. Every mutating action requires a separate explicit user confirmation; repeat the unchanged call only after confirmation. Screenshot, screen_find, and wait are observational actions.",
+        "description": "Direct computer control: type, click, hotkeys, scroll, move mouse, screenshots, find elements on screen. When the direct-control setting is off, every mutating action requires a separate explicit user confirmation; repeat the unchanged call only after confirmation. Screenshot, screen_find, and wait are observational actions.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -1142,15 +1143,26 @@ LOCAL_MACHINE_ONLY_ACTIONS = frozenset({
 })
 
 
-def get_tool_declarations(*, cloud_safe: bool = False) -> list[dict]:
+def get_tool_declarations(
+    *, cloud_safe: bool = False, direct_computer_control: bool = True
+) -> list[dict]:
     """Return the Gemini tools available for the requested runtime."""
-    if not cloud_safe:
-        return list(TOOL_DECLARATIONS)
-    return [
-        declaration
+    declarations = [
+        dict(declaration)
         for declaration in TOOL_DECLARATIONS
-        if declaration.get("name") in CLOUD_SAFE_ACTIONS
+        if not cloud_safe or declaration.get("name") in CLOUD_SAFE_ACTIONS
     ]
+    if direct_computer_control and not cloud_safe:
+        for declaration in declarations:
+            if declaration.get("name") == "computer_control":
+                declaration["description"] = (
+                    "Direct computer control is enabled by the user. Use mouse and keyboard actions "
+                    "to complete the user's requested computer task without asking for a separate "
+                    "confirmation for each click or keystroke. Ask only when the request or target "
+                    "is genuinely ambiguous. Screenshot, screen_find, and wait are observational actions."
+                )
+                break
+    return declarations
 
 
 class ArgusLive:
@@ -1171,7 +1183,10 @@ class ArgusLive:
         self.cloud_safe     = bool(cloud_safe)
         self.external_audio = bool(external_audio)
         self._api_key       = api_key.strip() if isinstance(api_key, str) else None
-        self.tool_declarations = get_tool_declarations(cloud_safe=self.cloud_safe)
+        self.tool_declarations = get_tool_declarations(
+            cloud_safe=self.cloud_safe,
+            direct_computer_control=load_direct_computer_control(),
+        )
         self.session        = None
         self.audio_in_queue = None
         self.out_queue      = None
@@ -1431,6 +1446,8 @@ class ArgusLive:
         action = str(args.get("action") or "").strip().lower().replace("-", "_").replace(" ", "_")
 
         if name == "computer_control" and action not in {"screenshot", "screen_find", "wait"}:
+            if load_direct_computer_control():
+                return None
             allowed, result = manager.request_operation(name, args)
             return None if allowed else result
 
@@ -1513,6 +1530,22 @@ class ArgusLive:
                 asyncio.run_coroutine_threadsafe(self.session.close(), self._loop)
             except Exception as e:
                 print(f"[ARGUS] ⚠️ Could not refresh session after voice preference change: {e}")
+
+    def update_direct_computer_control_preferences(self):
+        enabled = load_direct_computer_control()
+        if enabled:
+            self._tool_approvals().cancel_pending_operation("computer_control")
+        self.tool_declarations = get_tool_declarations(
+            cloud_safe=self.cloud_safe,
+            direct_computer_control=enabled,
+        )
+        state = "enabled" if enabled else "disabled"
+        self.ui.write_log(f"SYS: Direct mouse and keyboard control {state}; refreshing the live session.")
+        if self.session and self._loop:
+            try:
+                asyncio.run_coroutine_threadsafe(self.session.close(), self._loop)
+            except Exception as e:
+                print(f"[ARGUS] ⚠️ Could not refresh session after direct-control change: {e}")
 
     def _get_current_voice(self) -> str:
         if getattr(self, "voice_name", None):
@@ -2263,6 +2296,7 @@ def main():
             argus.ui.write_log(f"SYS: Locked volume required: {mount_path}")
         ui.on_voice_change = argus.update_voice
         ui.on_voice_preferences_change = argus.update_voice_preferences
+        ui.on_direct_computer_control_change = argus.update_direct_computer_control_preferences
         def _on_tts_change(provider, api_key, voice_id):
             if provider == "gemini":
                 argus._tts_engine = None
