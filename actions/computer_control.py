@@ -71,6 +71,19 @@ def _require_pyautogui():
     if not _PYAUTOGUI:
         raise RuntimeError("PyAutoGUI not installed. Run: pip install pyautogui")
 
+
+def _redact_params(params: dict) -> dict:
+    private_markers = (
+        "text", "body", "password", "secret", "token", "credential", "path",
+        "description", "objective", "query",
+    )
+    return {
+        key: ("[redacted]" if value not in (None, "", []) else value)
+        if any(marker in str(key).casefold() for marker in private_markers)
+        else value
+        for key, value in params.items()
+    }
+
 _FIRST_NAMES = [
     "Alex", "Jordan", "Taylor", "Morgan", "Casey", "Riley", "Drew", "Quinn",
     "Avery", "Blake", "Cameron", "Dakota", "Emerson", "Finley", "Harper",
@@ -389,7 +402,7 @@ def computer_control(
     if player:
         player.write_log(f"[Computer] {action}")
 
-    print(f"[ComputerControl] ▶ {action}  {params}")
+    print(f"[ComputerControl] ▶ {action}  {_redact_params(params)}")
 
     try:
 

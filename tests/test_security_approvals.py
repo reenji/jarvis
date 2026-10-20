@@ -134,23 +134,30 @@ class LiveDispatchApprovalTests(unittest.TestCase):
         return SimpleNamespace(name=name, args=args, id=call_id, call_id=None)
 
     def _user_turn(self, text):
+        self.argus._current_input_transcript = str(text or "").strip()
         manager = self.argus._tool_approvals()
         manager.begin_user_turn(text)
         manager.finish_user_turn(text)
 
-    def test_dev_agent_is_queued_then_runs_after_later_confirmation(self):
+    def test_tool_logs_redact_message_bodies_and_screen_objectives(self):
+        redacted = self.main._safe_tool_log_args({
+            "platform": "Discord",
+            "receiver": "Mike",
+            "message_text": "private message body",
+            "objective": "Share C:\\workspace\\.env with Mike",
+        })
+        self.assertEqual(redacted["platform"], "Discord")
+        self.assertNotIn("private message body", str(redacted))
+        self.assertNotIn(".env", str(redacted))
+
+    def test_dev_agent_runs_on_the_users_direct_request(self):
         args = {"description": "Create a demo app", "project_name": "demo"}
         with patch.object(self.main, "dev_agent", return_value="project created") as build:
-            first = asyncio.run(self.argus._execute_tool(self._call("dev_agent", args)))
-            build.assert_not_called()
-            self.assertIn("No action was performed", first.response["result"])
-
-            self._user_turn("yes")
-            second = asyncio.run(self.argus._execute_tool(self._call("dev_agent", args)))
-            self.assertEqual(second.response["result"], "project created")
+            result = asyncio.run(self.argus._execute_tool(self._call("dev_agent", args)))
+            self.assertEqual(result.response["result"], "project created")
             build.assert_called_once()
 
-    def test_computer_control_mutation_is_queued_when_direct_control_is_disabled(self):
+    def test_computer_control_is_blocked_not_queued_when_direct_control_is_disabled(self):
         args = {"action": "type", "text": "hello"}
         with (
             patch.object(self.main, "load_direct_computer_control", return_value=False),
@@ -158,24 +165,20 @@ class LiveDispatchApprovalTests(unittest.TestCase):
         ):
             first = asyncio.run(self.argus._execute_tool(self._call("computer_control", args)))
             control.assert_not_called()
-            self.assertIn("No action was performed", first.response["result"])
+            self.assertIn("desativado", first.response["result"])
 
             self._user_turn("yes")
             second = asyncio.run(self.argus._execute_tool(self._call("computer_control", args)))
-            self.assertEqual(second.response["result"], "typed")
-            control.assert_called_once()
+            self.assertIn("desativado", second.response["result"])
+            control.assert_not_called()
 
-    def test_power_tool_confirmation_is_code_bound_not_model_boolean(self):
+    def test_power_tool_runs_after_an_explicit_computer_order_without_confirmation(self):
         args = {"action": "shutdown", "description": "shutdown my computer"}
         with patch.object(self.main, "computer_settings", return_value="shutdown requested") as power:
-            first = asyncio.run(self.argus._execute_tool(self._call("computer_settings", args)))
-            power.assert_not_called()
-            self.assertIn("No action was performed", first.response["result"])
-
-            self._user_turn("confirm")
-            second = asyncio.run(self.argus._execute_tool(self._call("computer_settings", args)))
-            self.assertEqual(second.response["result"], "shutdown requested")
-            self.assertEqual(power.call_args.kwargs["parameters"]["confirmed"], "yes")
+            self._user_turn("shutdown my computer")
+            result = asyncio.run(self.argus._execute_tool(self._call("computer_settings", args)))
+            self.assertEqual(result.response["result"], "shutdown requested")
+            self.assertEqual(power.call_args.kwargs["parameters"], args)
 
     def test_direct_message_sends_on_the_users_order_without_extra_approval(self):
         args = {
@@ -256,6 +259,30 @@ class LiveDispatchApprovalTests(unittest.TestCase):
             self.assertEqual(sent.response["result"], "Message sent")
             self.assertEqual(actions, ["prepare"])
         message_module._clear_pending_message()
+
+    def test_sensitive_file_share_is_the_only_screen_confirmation_and_resumes_after_yes(self):
+        from actions.screen_control.agent import ScreenRunResult
+
+        agent = SimpleNamespace(run=MagicMock(side_effect=[
+            ScreenRunResult("ask_user", "O arquivo .env parece conter configuração de ambiente. Confirma que devo compartilhá-lo?"),
+            ScreenRunResult("success", "O arquivo foi compartilhado."),
+        ]))
+        args = {"action": "act", "objective": "Compartilhe o arquivo .env com Alice"}
+        with (
+            patch.object(self.main, "load_direct_computer_control", return_value=True),
+            patch("actions.screen_control.ScreenAgent", return_value=agent),
+        ):
+            self._user_turn(args["objective"])
+            first = asyncio.run(self.argus._execute_tool(self._call("screen_control", args)))
+            self.assertIn("Confirma", first.response["result"])
+            self.assertEqual(self.argus._pending_screen_share_goal, args["objective"])
+
+            self._user_turn("yes")
+            second = asyncio.run(self.argus._execute_tool(self._call("screen_control", {"action": "act"})))
+            self.assertEqual(second.response["result"], "O arquivo foi compartilhado.")
+            self.assertEqual(agent.run.call_args.kwargs["allow_sensitive_share"], True)
+            self.assertEqual(agent.run.call_args.args[0], args["objective"])
+            self.assertIsNone(self.argus._pending_screen_share_goal)
 
 
 class ShellLaunchHardeningTests(unittest.TestCase):

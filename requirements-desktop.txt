@@ -24,6 +24,7 @@ Pillow
 pandas
 psutil
 pyautogui
+keyboard==0.13.5; platform_system=="Windows"
 pygetwindow
 pyperclip
 pyqt6

@@ -1,7 +1,7 @@
 [
   {
     "name": "agent_task",
-    "description": "Executes complex multi-step tasks requiring multiple different tools. Examples: 'research X and save to file', 'find and organize files'. DO NOT use for single commands. NEVER use for Steam/Epic — use game_updater.",
+    "description": "Executes complex multi-step tasks requiring multiple different tools. Examples: 'research X and save to file', 'find and organize files'. DO NOT use for single commands. NEVER use for Steam/Epic \u2014 use game_updater.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -16,6 +16,52 @@
       },
       "required": [
         "goal"
+      ]
+    }
+  },
+  {
+    "name": "argus_ui_control",
+    "description": "Changes ARGUS's own interface. Use when the user asks to open or close the Command Center, change the theme or graphics quality, open settings, enter compact mode, toggle fullscreen, or show shortcuts.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "enum": [
+            "open_command_center",
+            "close_command_center",
+            "change_theme",
+            "change_graphics_quality",
+            "open_settings",
+            "compact_mode",
+            "fullscreen",
+            "show_shortcuts"
+          ],
+          "description": "The interface action to perform."
+        },
+        "theme": {
+          "type": "STRING",
+          "enum": [
+            "arc_reactor",
+            "stealth_red",
+            "vibranium_purple",
+            "nanotech_gold",
+            "platinum"
+          ],
+          "description": "Required for change_theme."
+        },
+        "graphics_quality": {
+          "type": "STRING",
+          "enum": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "description": "Required for change_graphics_quality. Low favors performance, medium is balanced, and high enables full visual detail."
+        }
+      },
+      "required": [
+        "action"
       ]
     }
   },
@@ -159,7 +205,7 @@
   },
   {
     "name": "computer_control",
-    "description": "Direct computer control: type, click, hotkeys, scroll, move mouse, screenshots, find elements on screen.",
+    "description": "Direct computer control: type, click, hotkeys, scroll, move mouse, screenshots, find elements on screen. Prefer screen_control for multi-step tasks; it targets Windows accessibility controls before screenshot coordinates and verifies each action. If direct control is disabled in settings, do not call mutating actions.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -802,52 +848,6 @@
     }
   },
   {
-    "name": "argus_ui_control",
-    "description": "Changes ARGUS's own interface. Use when the user asks to open or close the Command Center, change the theme or graphics quality, open settings, enter compact mode, toggle fullscreen, or show shortcuts.",
-    "parameters": {
-      "type": "OBJECT",
-      "properties": {
-        "action": {
-          "type": "STRING",
-          "enum": [
-            "open_command_center",
-            "close_command_center",
-            "change_theme",
-            "change_graphics_quality",
-            "open_settings",
-            "compact_mode",
-            "fullscreen",
-            "show_shortcuts"
-          ],
-          "description": "The interface action to perform."
-        },
-        "theme": {
-          "type": "STRING",
-          "enum": [
-            "arc_reactor",
-            "stealth_red",
-            "vibranium_purple",
-            "nanotech_gold",
-            "platinum"
-          ],
-          "description": "Required for change_theme."
-        },
-        "graphics_quality": {
-          "type": "STRING",
-          "enum": [
-            "low",
-            "medium",
-            "high"
-          ],
-          "description": "Required for change_graphics_quality. Low favors performance, medium is balanced, and high enables full visual detail."
-        }
-      },
-      "required": [
-        "action"
-      ]
-    }
-  },
-  {
     "name": "media_control",
     "description": "Controls music playback, primarily Spotify. Use when the user asks to play, resume, pause, stop, toggle, skip, or go back in Spotify, Apple Music, YouTube Music, or the active media player. Spotify is the default platform. Pass a song, artist, album, playlist, or Spotify link in query. When a plain Spotify search opens results, immediately use computer_control screen_click to select the matching visible track; do not ask the user to choose it.",
     "parameters": {
@@ -888,7 +888,7 @@
   },
   {
     "name": "open_app",
-    "description": "Opens any application on the computer. Use this whenever the user asks to open, launch, or start any app, website, or program. Always call this tool — never just say you opened it.",
+    "description": "Opens any application on the computer. Use this whenever the user asks to open, launch, or start any app, website, or program. Always call this tool \u2014 never just say you opened it.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -963,13 +963,13 @@
   },
   {
     "name": "save_memory",
-    "description": "Save an important personal fact about the user to long-term memory. Call this silently whenever the user reveals something worth remembering: name, age, city, job, preferences, hobbies, relationships, projects, or future plans. Do NOT call for: weather, reminders, searches, or one-time commands. Do NOT announce that you are saving — just call it silently. Values must be in English regardless of the conversation language.",
+    "description": "Save an important personal fact about the user to long-term memory. Call this silently whenever the user reveals something worth remembering: name, age, city, job, preferences, hobbies, relationships, projects, or future plans. Do NOT call for: weather, reminders, searches, or one-time commands. Do NOT announce that you are saving \u2014 just call it silently. Values must be in English regardless of the conversation language.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
         "category": {
           "type": "STRING",
-          "description": "identity — name, age, birthday, city, job, language, nationality | preferences — favorite food/color/music/film/game/sport, hobbies | projects — active projects, goals, things being built | relationships — friends, family, partner, colleagues | wishes — future plans, things to buy, travel dreams | notes — habits, schedule, anything else worth remembering"
+          "description": "identity \u2014 name, age, birthday, city, job, language, nationality | preferences \u2014 favorite food/color/music/film/game/sport, hobbies | projects \u2014 active projects, goals, things being built | relationships \u2014 friends, family, partner, colleagues | wishes \u2014 future plans, things to buy, travel dreams | notes \u2014 habits, schedule, anything else worth remembering"
         },
         "key": {
           "type": "STRING",
@@ -988,8 +988,36 @@
     }
   },
   {
+    "name": "screen_control",
+    "description": "Inspect the focused desktop app or complete a multi-step task in its visible interface. Use action=inspect only when asked what is on screen. Use action=act for any requested on-screen interaction. It uses Windows accessibility controls first and visual targeting when needed, then verifies each step. Follow the user's explicit request without asking for per-click or per-message confirmation. Ask only if the target is genuinely ambiguous or if a file about to be shared appears to contain secrets or sensitive configuration.",
+    "parameters": {
+      "type": "OBJECT",
+      "properties": {
+        "action": {
+          "type": "STRING",
+          "enum": [
+            "inspect",
+            "act"
+          ],
+          "description": "inspect describes the focused window; act completes the user's visible UI request."
+        },
+        "objective": {
+          "type": "STRING",
+          "description": "The complete user-authorized task, including app, target, and exact text if relevant."
+        },
+        "window_title": {
+          "type": "STRING",
+          "description": "Optional visible window title or app name to focus before acting."
+        }
+      },
+      "required": [
+        "action"
+      ]
+    }
+  },
+  {
     "name": "screen_process",
-    "description": "Captures and analyzes the screen or webcam image. MUST be called when user asks what is on screen, what you see, analyze my screen, look at camera, etc. You have NO visual ability without this tool. After calling this tool, stay SILENT — the vision module speaks directly.",
+    "description": "Captures and analyzes the screen or webcam image. MUST be called when user asks what is on screen, what you see, analyze my screen, look at camera, etc. You have NO visual ability without this tool. After calling this tool, stay SILENT \u2014 the vision module speaks directly.",
     "parameters": {
       "type": "OBJECT",
       "properties": {

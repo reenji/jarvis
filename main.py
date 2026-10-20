@@ -386,6 +386,26 @@ def _clean_transcript(text: str) -> str:
     text = re.sub(r"[\x00-\x08\x0b-\x1f]", "", text)
     return text.strip()
 
+
+def _safe_tool_log_args(args: dict) -> dict:
+    """Keep message bodies, credentials, and local file paths out of routine logs."""
+    private_markers = (
+        "text", "body", "password", "secret", "token", "credential", "api_key", "path",
+        "objective", "goal", "description", "query", "receiver", "recipient", "subject",
+        "to", "cc", "bcc",
+    )
+    safe = {}
+    for key, value in (args or {}).items():
+        if any(marker in str(key).casefold() for marker in private_markers):
+            safe[key] = "[redacted]" if value not in (None, "", []) else value
+        elif isinstance(value, dict):
+            safe[key] = _safe_tool_log_args(value)
+        elif isinstance(value, list):
+            safe[key] = ["[redacted]" if isinstance(item, (str, dict)) else item for item in value]
+        else:
+            safe[key] = value
+    return safe
+
 TOOL_DECLARATIONS = [
     {
         "name": "open_app",
@@ -702,7 +722,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "dev_agent",
-        "description": "Builds complete multi-file projects from scratch: plans, writes files, installs deps, opens VSCode, runs and fixes errors. The dispatcher requires a separate explicit user confirmation before the project work begins; repeat the unchanged call only after that confirmation.",
+        "description": "Builds complete multi-file projects from scratch: plans, writes files, installs deps, opens VSCode, runs and fixes errors. Start directly when the user asks for a project; ask only for missing requirements or a genuinely ambiguous choice.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -732,7 +752,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "computer_control",
-        "description": "Direct computer control: type, click, hotkeys, scroll, move mouse, screenshots, find elements on screen. When a requested text field is not focused, locate and click the visible field before typing; do not ask the user to click when the target is clear. When the direct-control setting is off, every mutating action requires a separate explicit user confirmation; repeat the unchanged call only after confirmation. Screenshot, screen_find, and wait are observational actions.",
+        "description": "Direct computer control: type, click, hotkeys, scroll, move mouse, screenshots, find elements on screen. For multi-step tasks, prefer screen_control, which targets Windows accessibility controls before screenshot coordinates and verifies each action. When a requested text field is not focused, locate and click the visible field before typing; do not ask the user to click when the target is clear. If direct control is disabled in settings, do not call mutating actions. Screenshot, screen_find, and wait are observational actions.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -1119,6 +1139,11 @@ TOOL_DECLARATIONS = [
     },
 ]
 
+# Keep the goal-oriented screen agent in the same Gemini Live declaration list
+# as the legacy one-action computer controls.
+from tools.screen_control import declaration as SCREEN_CONTROL_DECLARATION
+TOOL_DECLARATIONS.append(SCREEN_CONTROL_DECLARATION)
+
 # Tool names exposed by hosted clients. The names here are Gemini function
 # declaration names (which differ from a few implementation module names).
 CLOUD_SAFE_ACTIONS = frozenset({
@@ -1133,6 +1158,7 @@ CLOUD_SAFE_ACTIONS = frozenset({
 
 LOCAL_MACHINE_ONLY_ACTIONS = frozenset({
     "computer_control",
+    "screen_control",
     "open_app",
     "file_controller",
     "media_control",
@@ -1150,14 +1176,12 @@ def get_tool_declarations(
         for declaration in TOOL_DECLARATIONS
         if not cloud_safe or declaration.get("name") in CLOUD_SAFE_ACTIONS
     ]
-    if direct_computer_control and not cloud_safe:
+    if not cloud_safe and not direct_computer_control:
         for declaration in declarations:
             if declaration.get("name") == "computer_control":
                 declaration["description"] = (
-                    "Direct computer control is enabled by the user. Use mouse and keyboard actions "
-                    "to complete the user's requested computer task without asking for a separate "
-                    "confirmation for each click or keystroke. Ask only when the request or target "
-                    "is genuinely ambiguous. Screenshot, screen_find, and wait are observational actions."
+                    "Direct mouse and keyboard control is disabled in settings. Do not call mutating "
+                    "computer_control actions; use screenshot, screen_find, and wait only."
                 )
                 break
     return declarations
@@ -1208,6 +1232,8 @@ class ArgusLive:
         self._last_input_transcript = ""
         self._last_input_transcript_at = 0.0
         self._approval_manager = ToolApprovalManager()
+        self._screen_agent_instance = None
+        self._pending_screen_share_goal = None
         self._pending_self_quit = False
         self._pending_self_quit_farewell_received = False
         self._self_quit_timer = None
@@ -1420,34 +1446,16 @@ class ArgusLive:
         return f'Shutdown queued. Say exactly: "{SELF_QUIT_GOODBYE}"'
 
     def _tool_approval_block(self, name: str, args: dict) -> str | None:
-        """Enforce later-turn approval for sensitive dispatches."""
-        manager = self._tool_approvals()
+        """Enforce the user's direct-control preference without redundant prompts."""
         action = str(args.get("action") or "").strip().lower().replace("-", "_").replace(" ", "_")
 
-        if name == "computer_control" and action not in {"screenshot", "screen_find", "wait"}:
-            if load_direct_computer_control():
-                return None
-            allowed, result = manager.request_operation(name, args)
-            return None if allowed else result
-
-        if name == "dev_agent":
-            allowed, result = manager.request_operation(name, args)
-            return None if allowed else result
-
-        if name == "computer_settings":
-            description = str(args.get("description") or "").casefold()
-            dangerous = action in {"restart", "shutdown", "reboot", "poweroff", "power_off", "restart_computer", "shutdown_computer"}
-            if not dangerous and re.search(r"\b(restart|reboot|shutdown|shut down|power off|turn off)\b", description):
-                dangerous = True
-            if dangerous:
-                allowed, result = manager.request_operation(name, args)
-                if not allowed:
-                    return result
-                args["confirmed"] = "yes"
-                if action in {"reboot", "restart_computer"}:
-                    args["action"] = "restart"
-                elif action in {"poweroff", "power_off", "shutdown_computer"}:
-                    args["action"] = "shutdown"
+        if name in {"computer_control", "screen_control"}:
+            observational = (
+                (name == "computer_control" and action in {"screenshot", "screen_find", "wait"})
+                or (name == "screen_control" and action == "inspect")
+            )
+            if not observational and not load_direct_computer_control():
+                return "O controle direto do mouse e teclado está desativado em Configurações → Ações. Nenhuma ação foi executada."
 
         return None
 
@@ -1615,7 +1623,7 @@ class ArgusLive:
                 response={"result": qa_block_message(qa_decision)},
             )
 
-        print(f"[ARGUS] 🔧 {name}  {args}")
+        print(f"[ARGUS] 🔧 {name}  {_safe_tool_log_args(args)}")
         self.ui.set_state("THINKING")
 
         intercepted = self._intercept_ui_tool_call(name, args)
@@ -1720,6 +1728,39 @@ class ArgusLive:
                     daemon=True
                 ).start()
                 result = "Vision module activated. Stay completely silent — vision module will speak directly."
+
+            elif name == "screen_control":
+                from actions.screen_control import ScreenAgent
+                from core.tool_approval import is_explicit_cancellation, is_explicit_confirmation
+
+                agent = getattr(self, "_screen_agent_instance", None)
+                if agent is None:
+                    agent = ScreenAgent()
+                    self._screen_agent_instance = agent
+                transcript = str(getattr(self, "_current_input_transcript", "") or "")
+                screen_action = str(args.get("action", "act") or "act").strip().lower()
+                pending_goal = getattr(self, "_pending_screen_share_goal", None)
+                if pending_goal and is_explicit_cancellation(transcript):
+                    self._pending_screen_share_goal = None
+                    result = "Compartilhamento cancelado. Nenhum arquivo foi enviado."
+                elif screen_action == "inspect":
+                    result = await asyncio.to_thread(agent.inspect)
+                else:
+                    if screen_action != "act":
+                        raise ValueError("screen_control aceita apenas action=inspect ou action=act.")
+                    continuing_sensitive_share = bool(pending_goal and is_explicit_confirmation(transcript))
+                    objective = pending_goal if continuing_sensitive_share else str(args.get("objective", "") or "")
+                    run = await asyncio.to_thread(
+                        agent.run,
+                        objective,
+                        window_title=str(args.get("window_title", "") or ""),
+                        allow_sensitive_share=continuing_sensitive_share,
+                    )
+                    result = run.summary
+                    if run.status == "ask_user" and "arquivo" in run.summary.casefold() and "confirma" in run.summary.casefold():
+                        self._pending_screen_share_goal = objective
+                    else:
+                        self._pending_screen_share_goal = None
 
             elif name == "computer_settings":
                 r = await asyncio.to_thread(lambda: computer_settings(parameters=args, response=None, player=self.ui))
