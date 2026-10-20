@@ -96,6 +96,7 @@ class _MainWindowStartupMixin:
         self.on_text_command        = None
         self.on_voice_change        = None
         self.on_voice_preferences_change = None
+        self.on_direct_computer_control_change = None
         self.on_name_change         = None
         self.on_tts_provider_change = None
         self.on_quit_requested      = None
@@ -351,6 +352,7 @@ class _MainWindowStartupMixin:
         self._tts_overlay: TTSProviderOverlay | None = None
         self.on_voice_change = None
         self.on_voice_preferences_change = None
+        self.on_direct_computer_control_change = None
         self.on_tts_provider_change = None
         self._load_saved_voice()
         self._load_saved_tts()

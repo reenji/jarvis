@@ -164,6 +164,7 @@ class SettingsOverlay(_OverlayBase):
     voice_changed = pyqtSignal(str, str, str)  # provider, voice_id, api_key
     voice_selector_requested = pyqtSignal()
     voice_preferences_changed = pyqtSignal(str, int)
+    direct_computer_control_changed = pyqtSignal(bool)
     name_changed = pyqtSignal(str)
     theme_changed = pyqtSignal(str)
     graphics_changed = pyqtSignal(str)
@@ -177,7 +178,8 @@ class SettingsOverlay(_OverlayBase):
                  current_vad_silence_ms: int = 700, current_theme: str = "arc_reactor",
                  current_graphics: str = "medium", current_graphics_mode: str = "manual",
                  replay_intro: bool = False,
-                 current_motion_preference: str = "system"):
+                 current_motion_preference: str = "system",
+                 direct_computer_control_enabled: bool = True):
         super().__init__(parent)
         self.setAccessibleName("Configurações do ARGUS")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
@@ -229,7 +231,7 @@ class SettingsOverlay(_OverlayBase):
         tb_lay.setSpacing(TOKENS.spacing["legacy_4"])
 
         self._s_tabs: list[QPushButton] = []
-        self._s_tab_names = ["Identidade", "Voz", "Tema", "Gráficos"]
+        self._s_tab_names = ["Identidade", "Voz", "Tema", "Gráficos", "Ações"]
         self._s_active_tab = 0
 
         for i, name in enumerate(self._s_tab_names):
@@ -484,6 +486,44 @@ class SettingsOverlay(_OverlayBase):
         gfx_lay.addWidget(self._motion_note)
         gfx_lay.addStretch()
         self._s_stack.addWidget(gfx_page)
+
+        # Page 4: direct mouse and keyboard control.
+        control_page = QWidget()
+        control_page.setStyleSheet("background: transparent;")
+        control_lay = QVBoxLayout(control_page)
+        control_lay.setContentsMargins(TOKENS.spacing["legacy_4"], TOKENS.spacing["legacy_8"], TOKENS.spacing["legacy_4"], TOKENS.spacing["legacy_4"])
+        control_lay.setSpacing(TOKENS.spacing["legacy_8"])
+        control_lay.addWidget(_lbl(
+            "Controle do computador", TOKENS.font_sizes["legacy_9"], bold=True,
+            align=Qt.AlignmentFlag.AlignLeft,
+        ))
+        self._direct_computer_control = QCheckBox(
+            "Executar cliques e digitação sem confirmar cada ação"
+        )
+        self._direct_computer_control.setAccessibleName(
+            "Executar ações do mouse e teclado sem confirmação individual"
+        )
+        self._direct_computer_control.setMinimumHeight(44)
+        self._direct_computer_control.setChecked(bool(direct_computer_control_enabled))
+        self._direct_computer_control.setStyleSheet(
+            f"color: {C.TEXT_MED}; background: transparent; spacing: 10px;"
+        )
+        self._direct_computer_control.toggled.connect(
+            self.direct_computer_control_changed.emit
+        )
+        control_lay.addWidget(self._direct_computer_control)
+        self._direct_computer_control_note = _lbl(
+            "Ativo por padrão. O ARGUS pode usar mouse, teclado e atalhos para concluir pedidos sem pedir autorização em cada clique. "
+            "Envios de mensagens e e-mails, além de desligar ou reiniciar o computador, continuam com suas confirmações próprias. "
+            '<a href="https://github.com/reenji/jarvis/blob/main/docs/TERMS.md">Ler os termos do ARGUS</a>.',
+            TOKENS.font_sizes["legacy_8"], color_role="TEXT_DIM",
+            align=Qt.AlignmentFlag.AlignLeft,
+        )
+        self._direct_computer_control_note.setWordWrap(True)
+        self._direct_computer_control_note.setOpenExternalLinks(True)
+        control_lay.addWidget(self._direct_computer_control_note)
+        control_lay.addStretch()
+        self._s_stack.addWidget(control_page)
 
         self._switch_s_tab(0)
         self._highlight_theme(current_theme)

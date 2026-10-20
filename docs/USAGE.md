@@ -42,6 +42,13 @@ Examples (depending on what your toolset supports):
 - “Clean my downloads folder”
 - “Take a screenshot”
 
+O controle direto do mouse e do teclado fica ativado por padrão. O ARGUS pode
+usar cliques, digitação, atalhos e interação com elementos na tela para concluir
+uma tarefa solicitada, sem pedir autorização para cada entrada. Para alterar,
+abra **Configurações → Ações** e desative **Executar cliques e digitação sem
+confirmar cada ação**. O sistema operacional ainda pode exigir permissões de
+acessibilidade e captura de tela. Consulte os [termos de controle do computador](TERMS.md).
+
 ### 6) Gmail
 
 Gmail uses Google OAuth rather than an API key or Gmail password. One-time setup:

@@ -41,6 +41,7 @@ class _MainWindowSettingsMixin:
             pass
 
         voice_preferences = load_voice_preferences(UI_SETTINGS_FILE)
+        direct_control_enabled = load_direct_computer_control(UI_SETTINGS_FILE)
 
         cw = self.centralWidget()
         ov = SettingsOverlay(
@@ -54,6 +55,7 @@ class _MainWindowSettingsMixin:
             current_graphics_mode=get_graphics_mode(),
             replay_intro=_load_intro_settings()[1],
             current_motion_preference=self._motion_preference,
+            direct_computer_control_enabled=direct_control_enabled,
         )
         ow, oh = 600, 500
         ov.setGeometry(
@@ -70,6 +72,7 @@ class _MainWindowSettingsMixin:
         ov.tour_replay_requested.connect(self._request_manual_tour_replay)
         ov.voice_selector_requested.connect(self._show_voice_select)
         ov.voice_preferences_changed.connect(self._on_voice_preferences_changed)
+        ov.direct_computer_control_changed.connect(self._on_direct_computer_control_changed)
         ov.show()
         self._settings_overlay = ov
 
@@ -91,6 +94,19 @@ class _MainWindowSettingsMixin:
             self._log.append_log(f"SYS: Voice response style set to {after['response_style']}.")
         if before["vad_silence_ms"] != after["vad_silence_ms"]:
             self._log.append_log(f"SYS: Speech end pause set to {after['vad_silence_ms']} ms.")
+
+    def _on_direct_computer_control_changed(self, enabled: bool):
+        before = load_direct_computer_control(UI_SETTINGS_FILE)
+        after = save_direct_computer_control(enabled, UI_SETTINGS_FILE)
+        if after == before:
+            return
+        if self.on_direct_computer_control_change:
+            try:
+                self.on_direct_computer_control_change()
+            except Exception as exc:
+                self._log.append_log(f"SYS: Direct-control callback error: {exc}")
+        state = "enabled" if after else "disabled"
+        self._log.append_log(f"SYS: Direct mouse and keyboard control {state}.")
 
     def _on_settings_name(self, name: str):
         if name:

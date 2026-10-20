@@ -160,6 +160,7 @@ class ToolApprovalManager:
             self._pending = {
                 "id": uuid.uuid4().hex,
                 "kind": "operation",
+                "tool": str(tool_name),
                 "key": key,
                 "created_turn": self.turn_id,
                 "created_at": self._clock(),
@@ -206,6 +207,16 @@ class ToolApprovalManager:
 
     def cancel_pending(self) -> None:
         self._clear_pending()
+
+    def cancel_pending_operation(self, tool_name: str) -> bool:
+        """Clear one tool's stale operation approval when its policy changes."""
+        pending = self._live_pending()
+        if not pending or pending.get("kind") != "operation":
+            return False
+        if pending.get("tool") != str(tool_name):
+            return False
+        self._clear_pending()
+        return True
 
     @staticmethod
     def _operation_key(tool_name: str, args: dict[str, Any]) -> str:

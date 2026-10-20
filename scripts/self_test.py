@@ -182,7 +182,7 @@ def _system() -> CapabilityResult:
             "tests.test_core_resilience.PureActionContractTests.test_computer_power_target_must_be_explicit",
             "tests.test_qa_system.QAModeSafetyTests.test_power_actions_remain_blocked_even_with_desktop_opt_in",
         ),
-        "app routing and desktop safety contracts pass; real keyboard/mouse actions remain supervised",
+        "app routing and power-action safety contracts pass; live keyboard/mouse injection is not exercised",
         live=True,
     )
 
