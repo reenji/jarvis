@@ -61,6 +61,7 @@ memory/task_history.json
 # Local runtime artifacts
 *.db
 *.sqlite
+*.sqlite3
 
 # Playwright
 playwright/.cache/

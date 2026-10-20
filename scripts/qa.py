@@ -137,7 +137,7 @@ def automated(_args) -> int:
         "agent_task", "browser_control", "email_control", "file_controller", "file_processor",
         "deep_research", "flight_finder", "graphics_quality", "argus_ui_control", "open_app",
         "media_control", "reminder", "save_memory", "screen_control", "screen_process", "send_message",
-        "task_status", "weather_report", "web_search", "youtube_video",
+        "task_status", "weather_report", "web_search", "youtube_video", "local_knowledge",
     }
     safety_covered = {
         "browser_control", "code_helper", "computer_control", "computer_settings",
