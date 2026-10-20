@@ -204,24 +204,37 @@ def _generic_media_key(action: str) -> str:
 
 def _select_spotify_search_result(query: str) -> str:
     """Open Spotify's matching Windows search result and verify playback visually."""
+    return _run_spotify_visual_task(
+        "Find the visible Spotify search result that best matches this exact request: "
+        f"{query!r}. Match the track title and artist when the user provided them. "
+        "If Spotify is still loading the search results, wait and inspect again. "
+        "Click the matching result to start playback, then verify the requested track "
+        "is playing. Do not ask the user to select it."
+    )
+
+
+def _play_spotify_opened_item(uri: str) -> str:
+    """Start and visually verify an item opened from a user-provided Spotify URI."""
+    return _run_spotify_visual_task(
+        f"The user explicitly requested the Spotify item at {uri!r}. Spotify has just "
+        "opened that item. Start playback from the main requested item, using its Play "
+        "control or track row. Do not choose recommendations or unrelated results. "
+        "Wait for the app if it is still loading, then verify that playback started."
+    )
+
+
+def _run_spotify_visual_task(objective: str) -> str:
     from core.computer_control_preferences import load_direct_computer_control
 
     if not load_direct_computer_control():
         return (
-            f"Spotify search results for {query!r} are open, but direct mouse/keyboard "
+            "Spotify is open, but direct mouse/keyboard "
             "control is disabled in Settings → Actions; I did not select a result."
         )
 
     from actions.screen_control.agent import ScreenAgent
 
-    outcome = ScreenAgent().run(
-        "Find the visible Spotify search result that best matches this exact request: "
-        f"{query!r}. Match the track title and artist when the user provided them. "
-        "If Spotify is still loading the search results, wait and inspect again. "
-        "Click the matching result to start playback, then verify the requested track "
-        "is playing. Do not ask the user to select it.",
-        window_title="Spotify",
-    )
+    outcome = ScreenAgent().run(objective, window_title="Spotify")
     if outcome.status == "success":
         return outcome.summary
     if outcome.status == "ask_user":
@@ -263,10 +276,12 @@ def media_control(parameters: dict | None = None, response=None, player=None, se
         uri = _spotify_uri(query)
         ok, detail = _open_uri(uri or f"spotify:search:{quote(query)}")
         if ok:
+            if _SYSTEM == "Windows":
+                if uri:
+                    return _play_spotify_opened_item(uri)
+                return _select_spotify_search_result(query)
             if uri:
                 return "Opened the requested item in Spotify."
-            if _SYSTEM == "Windows":
-                return _select_spotify_search_result(query)
             return f"Opened Spotify results for {query}. I will click the matching track to start playback."
         return f"Could not open Spotify: {detail}"
 
