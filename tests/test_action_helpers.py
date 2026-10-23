@@ -81,10 +81,34 @@ class ActionHelperTests(unittest.TestCase):
         self.assertIn("disabled", result)
         screen_agent.assert_not_called()
 
-    def test_spotify_link_opens_directly_without_visually_selecting_search_result(self):
+    def test_spotify_link_uses_direct_item_playback_without_search_selection(self):
+        with (
+            patch.object(media_control, "_SYSTEM", "Windows"),
+            patch.object(media_control, "_open_uri", return_value=(True, "")) as open_uri,
+            patch.object(
+                media_control,
+                "_play_spotify_opened_item",
+                return_value="Playback verified.",
+            ) as play_item,
+            patch.object(media_control, "_select_spotify_search_result") as select,
+        ):
+            result = media_control.media_control({
+                "action": "play_query",
+                "platform": "spotify",
+                "query": "https://open.spotify.com/track/abc123?si=share-token",
+            })
+
+        self.assertEqual(result, "Playback verified.")
+        open_uri.assert_called_once_with("spotify:track:abc123")
+        play_item.assert_called_once_with("spotify:track:abc123")
+        select.assert_not_called()
+
+    def test_spotify_direct_link_failure_does_not_fall_back_to_search_selection(self):
+        failure = "Spotify opened, but playback verification failed."
         with (
             patch.object(media_control, "_SYSTEM", "Windows"),
             patch.object(media_control, "_open_uri", return_value=(True, "")),
+            patch.object(media_control, "_play_spotify_opened_item", return_value=failure),
             patch.object(media_control, "_select_spotify_search_result") as select,
         ):
             result = media_control.media_control({
@@ -93,7 +117,7 @@ class ActionHelperTests(unittest.TestCase):
                 "query": "https://open.spotify.com/track/abc123",
             })
 
-        self.assertEqual(result, "Opened the requested item in Spotify.")
+        self.assertEqual(result, failure)
         select.assert_not_called()
 
     def test_successful_macos_direct_launch_has_no_artificial_post_wait(self):
