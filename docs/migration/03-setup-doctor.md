@@ -9,7 +9,9 @@ validates the selected key with one small Gemini text request capped at a
 credential, quota, server, or network hints; raw SDK exception text and key
 values are never printed. The prompt uses `getpass` so newly entered keys are
 not echoed. Setup asks whether optional voice should be enabled and saves the
-preference for Phase 5.
+preference. When voice is enabled, `argus` without a subcommand starts voice
+mode; `argus chat` always selects text mode. `argus voice` explicitly starts
+voice mode regardless of the saved default.
 
 When a secure system keyring backend is available, setup stores the Gemini key
 there and writes only a keyring reference in the config. Otherwise it stores
@@ -25,7 +27,8 @@ Commands:
 - `argus config show` prints the effective model and voice settings while
   redacting the API key.
 - `argus config set voice.enabled true|false` and `argus config set voice.name
-  <name>` change voice preferences.
+  <name>` change voice preferences. The saved voice name is used by the CLI's
+  Live session.
 - `argus config set llm.model <model>` selects the text model. The
   `ARGUS_CLI_MODEL` environment variable takes precedence.
 

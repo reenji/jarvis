@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sqlite3
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -152,6 +153,19 @@ class SessionStoreTests(unittest.TestCase):
         self.assertTrue(created[0].stopped)
         self.assertIn("ARGUS voice session ended.", output)
 
+    def test_voice_mode_handles_engine_initialization_errors_without_traceback(self):
+        from cli.voice import run_voice
+
+        output = []
+        result = run_voice(
+            output=output.append,
+            live_factory=Mock(side_effect=RuntimeError("private provider detail")),
+            settings_loader=lambda: SimpleNamespace(voice=SimpleNamespace(name="kore")),
+            api_key_loader=lambda: "fake-key",
+        )
+        self.assertEqual(result, 2)
+        self.assertEqual(output, ["Could not initialize voice mode (RuntimeError)."])
+
     def test_debug_screens_flag_enables_private_screenshot_mode(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch.dict(
@@ -168,8 +182,9 @@ class SessionStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             from unittest.mock import patch
 
-            with patch.dict(os.environ, {"ARGUS_SESSION_DB": str(Path(temp_dir) / "sessions.sqlite3")}):
-                self.assertEqual(main(["sessions"]), 0)
+            with patch.dict(sys.modules, {"main": None, "sounddevice": None}):
+                with patch.dict(os.environ, {"ARGUS_SESSION_DB": str(Path(temp_dir) / "sessions.sqlite3")}):
+                    self.assertEqual(main(["sessions"]), 0)
 
 
 class FakeRegistry:

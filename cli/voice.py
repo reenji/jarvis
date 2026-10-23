@@ -73,11 +73,15 @@ def run_voice(
         return 2
 
     terminal = VoiceTerminalClient(output=output)
-    assistant = live_factory(
-        terminal,
-        str(getattr(settings.voice, "name", "puck") or "puck"),
-        api_key=api_key,
-    )
+    try:
+        assistant = live_factory(
+            terminal,
+            str(getattr(settings.voice, "name", "puck") or "puck"),
+            api_key=api_key,
+        )
+    except Exception as exc:
+        output(f"Could not initialize voice mode ({type(exc).__name__}).")
+        return 2
     output("ARGUS voice is listening. Speak naturally; press Ctrl+C to exit.")
     try:
         async_runner(assistant.run())
