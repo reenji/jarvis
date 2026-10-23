@@ -1,7 +1,7 @@
 # CLI migration status
 
 Repository: reenji/jarvis
-Active branch: feat/cli-text-sessions (stacked on feat/cli-core-boundaries)
+Active branch: feat/cli-setup (stacked on feat/cli-text-sessions)
 Migration plan source: attached PDF, reviewed before implementation.
 
 ## Progress
@@ -10,8 +10,8 @@ Migration plan source: attached PDF, reviewed before implementation.
 |---|---|---|
 | 0. Repository inventory | Complete | Documentation only; no runtime code changed. |
 | 1. Core boundaries | Complete | Split required conversation events from optional desktop controls; keep adapter compatibility. |
-| 2. Text CLI and sessions | Implemented | Adds one-shot `argus ask`, interactive `argus chat`, resumable sessions, and local SQLite history. PR is stacked on Phase 1. |
-| 3. Setup, configuration, and doctor | Pending | Keep secrets out of the repository and terminal output. |
+| 2. Text CLI and sessions | Partial | Text turns and SQLite sessions work. A Phase 2 parity follow-up is still required for the eye banner, Rich streaming/tool output, `-q`/`--continue`, prompt history/completion, and cancellation behavior before Phase 7. |
+| 3. Setup, configuration, and doctor | Implemented | Adds hidden-key setup, private user config, redacted config commands, and local/API diagnostics. Clean-install verification depends on Phase 6 packaging. PR is stacked on Phase 2. |
 | 4. Desktop tools | Pending | Preserve direct user commands; stop on anti-bot challenges. |
 | 5. Optional voice | Pending | Text mode must remain available without audio dependencies. |
 | 6. Packaging and installation | Pending | Keep the hosted API/web deployment path intact. |
@@ -29,4 +29,4 @@ Migration plan source: attached PDF, reviewed before implementation.
 
 ## Phase 0 result
 
-The repository inventory and migration decisions are committed on feat/cli-inventory. Phase 0 changed documentation only; Phase 1 defines adapter boundaries and retains the desktop and hosted clients. Phase 2 adds the text CLI and resumable sessions in a separate feature PR. Next is setup, configuration, and doctor.
+The repository inventory and migration decisions are committed on feat/cli-inventory. Phase 0 changed documentation only; Phase 1 defines adapter boundaries and retains the desktop and hosted clients. Phase 2 has a working text CLI and resumable sessions, with the parity items above still open. Phase 3 adds setup, configuration, and doctor in its own feature PR. Next is terminal tool behavior.

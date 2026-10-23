@@ -12,8 +12,8 @@ also prints the session ID to stderr so it can be resumed later.
   a session.
 - `argus sessions [--limit N]` lists recent sessions.
 - `argus delete ID` deletes a session. A unique ID prefix is accepted.
-- Interactive slash commands: `/help`, `/new`, `/sessions`, `/resume ID`,
-  `/clear`, `/delete ID`, and `/exit`.
+- Interactive slash commands: `/help`, `/new`, `/sessions`, `/doctor`,
+  `/resume ID`, `/clear`, `/delete ID`, and `/exit`.
 
 The CLI sends normal text requests to Gemini and handles function calls through
 the existing tool registry. It keeps the model's function-call content in the
@@ -44,3 +44,12 @@ conversation. Listing and deleting saved sessions do not initialize Gemini or
 audio devices. Audio remains outside this phase and is not needed for text mode.
 The package dependency and installer split is handled in Phase 6; until then,
 use the repository's established environment setup to supply runtime packages.
+
+## Remaining Phase 2 parity work
+
+This first pass provides usable text sessions but does not yet meet every PDF
+acceptance criterion. Before Phase 7, add the eye banner and brand candidates,
+Rich streaming and tool/source lines, `-q` and `--continue` aliases, prompt
+history and slash completion, and clean Ctrl+C cancellation of an in-progress
+tool action. Track these as a separate feature change rather than treating this
+phase as complete.

@@ -15,6 +15,12 @@ These decisions adapt the attached migration plan to reenji/jarvis and the owner
 - Keep the anti-bot rule: stop automation when a verification challenge appears; do not solve or bypass it.
 - Do not persist screenshots by default. Any diagnostic screenshot saving must be explicit and local.
 
+## Configuration storage
+
+- Store the user config next to the CLI's per-user state database, using the OS-specific directory already selected by `ARGUS_HOME` and the session store. This keeps config, session state, and their access controls together; `ARGUS_CONFIG_FILE` can select a different config file.
+- Alternatives considered: always use `~/.argus/config.yaml`, or follow the standard OS config directory separately from session state. The OS-specific state path was chosen to match Phase 2, avoid a second per-user directory, and use the Windows profile ACL. POSIX directories and config files are restricted to owner access.
+- Prefer a system keyring backend when it is available and secure; otherwise store the API key in the restricted config file. `argus config show` never prints the key, and `argus config set` refuses secret fields so they do not enter shell history.
+
 ## Change and branch policy
 
 - Every feature/change is isolated in its own feat/slug branch and PR with exactly five meaningful commits.
