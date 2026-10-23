@@ -100,6 +100,58 @@ class SessionStoreTests(unittest.TestCase):
             ["Você> Abra o Spotify", "ARGUS> A música está tocando.", "[ARGUS] Gemini Live connected."],
         )
 
+    def test_voice_mode_explains_optional_audio_dependency_without_importing_desktop_app(self):
+        from cli.voice import run_voice
+
+        output = []
+        with patch("cli.voice.importlib.util.find_spec", return_value=None):
+            result = run_voice(output=output.append, audio_available=lambda: False)
+        self.assertEqual(result, 2)
+        self.assertTrue(any("requirements-desktop.txt" in line for line in output))
+
+    def test_voice_mode_uses_saved_settings_and_closes_cleanly_on_interrupt(self):
+        from cli.voice import VoiceTerminalClient, run_voice
+
+        class FakeAssistant:
+            def __init__(self, client, voice_name, *, api_key):
+                self.client = client
+                self.voice_name = voice_name
+                self.api_key = api_key
+                self.stopped = False
+
+            async def run(self):
+                await asyncio.sleep(0)
+
+            def request_shutdown(self):
+                self.stopped = True
+
+        settings = SimpleNamespace(voice=SimpleNamespace(name="kore"))
+        created = []
+
+        def factory(*args, **kwargs):
+            assistant = FakeAssistant(*args, **kwargs)
+            created.append(assistant)
+            return assistant
+
+        def interrupted(coroutine):
+            coroutine.close()
+            raise KeyboardInterrupt
+
+        output = []
+        result = run_voice(
+            output=output.append,
+            live_factory=factory,
+            settings_loader=lambda: settings,
+            api_key_loader=lambda: "fake-key",
+            async_runner=interrupted,
+        )
+        self.assertEqual(result, 130)
+        self.assertEqual(created[0].voice_name, "kore")
+        self.assertEqual(created[0].api_key, "fake-key")
+        self.assertIsInstance(created[0].client, VoiceTerminalClient)
+        self.assertTrue(created[0].stopped)
+        self.assertIn("ARGUS voice session ended.", output)
+
     def test_debug_screens_flag_enables_private_screenshot_mode(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch.dict(

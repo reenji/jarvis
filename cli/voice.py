@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 from collections.abc import Callable
 from typing import Any
 
@@ -33,16 +34,27 @@ def run_voice(
     live_factory: Callable[..., Any] | None = None,
     settings_loader: Callable[[], Any] | None = None,
     api_key_loader: Callable[[], str] | None = None,
+    audio_available: Callable[[], bool] | None = None,
     async_runner: Callable[[Any], Any] = asyncio.run,
 ) -> int:
     """Run the existing Gemini Live engine without starting the desktop UI."""
     if live_factory is None:
+        audio_available = audio_available or (
+            lambda: importlib.util.find_spec("sounddevice") is not None
+        )
+        if not audio_available():
+            output(
+                "Voice mode needs the optional sounddevice audio dependency. "
+                "Until the voice extra is packaged, install `requirements-desktop.txt`."
+            )
+            return 2
         try:
             from main import ArgusLive
         except ImportError as exc:
             output(
-                "Voice mode needs the optional desktop audio dependencies. "
-                "Install the project's desktop requirements, then run `argus voice` again."
+                "Voice mode could not load its optional desktop dependencies "
+                f"({getattr(exc, 'name', None) or type(exc).__name__}). "
+                "Install `requirements-desktop.txt`, then run `argus voice` again."
             )
             return 2
         live_factory = ArgusLive
@@ -74,6 +86,6 @@ def run_voice(
         output("ARGUS voice session ended.")
         return 130
     except Exception as exc:
-        output(f"Voice session failed ({type(exc).__name__}): {str(exc)[:240]}")
+        output(f"Voice session failed ({type(exc).__name__}). Check Gemini and audio device access.")
         return 1
     return 0
