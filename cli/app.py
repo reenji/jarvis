@@ -198,19 +198,63 @@ async def _interactive(
     from cli.client import TerminalClient
     from cli.prompt import InteractivePrompt
     from cli.terminal_ui import TerminalUI
+    from cli.terminal_profile import load_terminal_profile
 
-    ui = TerminalUI()
+    ui = TerminalUI(profile=load_terminal_profile())
     terminal = TerminalClient(output=ui.system, error=ui.error)
     prompter = InteractivePrompt()
+
     try:
-        conversation = _new_conversation(store, session_id, terminal=terminal)
+        resolved_session_id = _resolve_session(store, session_id)
+        if session_id and resolved_session_id is None:
+            raise ValueError(f"Session not found or ID prefix is ambiguous: {session_id}")
     except (ValueError, KeyError) as exc:
         ui.error(str(exc))
         return 2
 
+    try:
+        from config.settings import get_api_key
+
+        get_api_key()
+        api_ready = True
+    except Exception:
+        api_ready = False
+
     if show_banner:
-        ui.banner()
-    ui.info(f"ARGUS text session {conversation.session_id[:12]}. Type /help for commands.")
+        from cli.banner import banner_details
+
+        package_version, model = banner_details()
+        try:
+            from tools.registry import registry
+
+            tool_declarations = registry.declarations()
+        except Exception:
+            tool_declarations = []
+        ui.dashboard(
+            package_version=package_version,
+            model=model,
+            session_id=resolved_session_id or "new session",
+            workspace=os.getcwd(),
+            tool_declarations=tool_declarations,
+            api_ready=api_ready,
+        )
+
+    if not api_ready:
+        ui.error("No Gemini API key is configured. Run `argus setup` before starting a conversation.")
+        return 2
+
+    if resolved_session_id is None:
+        resolved_session_id = store.create("New conversation")
+
+    try:
+        conversation = _new_conversation(store, resolved_session_id, terminal=terminal)
+    except Exception as exc:
+        ui.error(f"Could not start ARGUS: {str(exc)[:300]}")
+        if show_banner:
+            ui.info("Configure access with `argus setup`, then run `argus` again.")
+        return 2
+
+    ui.info(f"Session {conversation.session_id[:12]} ready. Type /help for commands.")
     prompt_interrupts = 0
     while True:
         try:
