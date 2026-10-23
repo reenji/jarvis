@@ -83,6 +83,15 @@ def test_terminal_names_are_blocked_as_requested_window_targets(target):
     assert is_blocked_terminal_target(target)
 
 
+def test_focus_delay_is_configurable_and_bounded_by_environment():
+    with patch.dict("os.environ", {"ARGUS_SCREEN_FOCUS_DELAY": "2.5"}):
+        assert ScreenConfig.from_env().focus_delay == 2.5
+    with patch.dict("os.environ", {"ARGUS_SCREEN_FOCUS_DELAY": "99"}):
+        assert ScreenConfig.from_env().focus_delay == 10
+    with patch.dict("os.environ", {"ARGUS_SCREEN_FOCUS_DELAY": "invalid"}):
+        assert ScreenConfig.from_env().focus_delay == ScreenConfig.focus_delay
+
+
 def test_active_terminal_window_fails_closed_before_capture():
     from types import SimpleNamespace
     from actions.screen_control.window import get_active_window
@@ -132,14 +141,14 @@ def test_screen_agent_verifies_success_after_two_observations():
 def test_screen_agent_launches_named_app_then_focuses_before_interacting():
     capture = _capture()
     agent = ScreenAgent(
-        config=ScreenConfig(max_steps=2, max_seconds=10, settle_delay=0.1),
+        config=ScreenConfig(max_steps=2, max_seconds=10, settle_delay=0.1, focus_delay=1.2),
         abort_controller=_NoopAbort(),
     )
     done = ScreenAction(ActionType.DONE, summary="A tarefa no Spotify foi concluída.")
     with (
         patch("actions.screen_control.agent.bring_to_front", side_effect=[False, False, True]) as focus,
         patch("actions.open_app.open_app", return_value="Opened Spotify.") as launch,
-        patch("actions.screen_control.agent.time.sleep"),
+        patch("actions.screen_control.agent.time.sleep") as sleep,
         patch("actions.screen_control.agent.capture_active_window", return_value=capture),
         patch("actions.screen_control.agent.describe_controls", return_value=[]),
         patch("actions.screen_control.agent.decide_next_action", return_value=done),
@@ -149,6 +158,7 @@ def test_screen_agent_launches_named_app_then_focuses_before_interacting():
     assert result.status == "success"
     launch.assert_called_once_with({"app_name": "Spotify"})
     assert focus.call_count == 3
+    sleep.assert_any_call(1.2)
 
 
 def test_screen_agent_does_not_act_on_wrong_window_if_requested_app_cannot_open():

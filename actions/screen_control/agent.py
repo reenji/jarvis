@@ -242,7 +242,7 @@ class ScreenAgent:
                     if self.abort_controller.aborted:
                         return ScreenRunResult("aborted", "Interrompi a abertura do aplicativo pelo atalho de emergência.", 0, run_id)
                     return ScreenRunResult("fail", f"Não consegui abrir e focar a janela de {window_title!r}.", 0, run_id)
-                time.sleep(0.25)
+                time.sleep(self.config.focus_delay)
 
             for step in range(1, self.config.max_steps + 1):
                 if self.abort_controller.aborted:
