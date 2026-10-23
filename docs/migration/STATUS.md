@@ -1,7 +1,7 @@
 # CLI migration status
 
 Repository: reenji/jarvis
-Execution branch: feat/cli-inventory
+Active branch: feat/cli-core-boundaries (stacked on feat/cli-inventory)
 Migration plan source: attached PDF, reviewed before implementation.
 
 ## Progress
@@ -9,8 +9,8 @@ Migration plan source: attached PDF, reviewed before implementation.
 | Phase | Status | Notes |
 |---|---|---|
 | 0. Repository inventory | Complete | Documentation only; no runtime code changed. |
-| 1. Core boundaries | Pending | Preserve existing desktop and hosted adapters until the CLI works. |
-| 2. Text CLI and sessions | Pending | The existing argus entry point currently starts the desktop UI. |
+| 1. Core boundaries | Complete | Split required conversation events from optional desktop controls; keep adapter compatibility. |
+| 2. Text CLI and sessions | Pending | The existing argus entry point still starts the desktop UI; this is the next implementation phase. |
 | 3. Setup, configuration, and doctor | Pending | Keep secrets out of the repository and terminal output. |
 | 4. Desktop tools | Pending | Preserve direct user commands; stop on anti-bot challenges. |
 | 5. Optional voice | Pending | Text mode must remain available without audio dependencies. |
@@ -29,4 +29,4 @@ Migration plan source: attached PDF, reviewed before implementation.
 
 ## Phase 0 result
 
-The repository inventory and migration decisions are committed on feat/cli-inventory. Runtime code is unchanged. The next change is a separate core-boundary feature PR.
+The repository inventory and migration decisions are committed on feat/cli-inventory. Phase 0 changed documentation only; Phase 1 defines adapter boundaries and retains the desktop and hosted clients. The next change is a separate text-CLI feature PR.
