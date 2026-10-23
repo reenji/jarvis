@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, patch
 
 from google.genai import types
 
@@ -56,6 +56,19 @@ class SessionStoreTests(unittest.TestCase):
         self.assertEqual(parser.parse_args(["ask", "hello", "Argus"]).prompt, ["hello", "Argus"])
         self.assertEqual(parser.parse_args(["chat", "--resume", "abc"]).session, "abc")
         self.assertEqual(parser.parse_args(["sessions", "--limit", "5"]).limit, 5)
+        self.assertTrue(parser.parse_args(["--debug-screens", "ask", "hello"]).debug_screens)
+
+    def test_debug_screens_flag_enables_private_screenshot_mode(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with patch.dict(
+                os.environ,
+                {
+                    "ARGUS_SESSION_DB": str(Path(temp_dir) / "sessions.sqlite3"),
+                    "ARGUS_DEBUG_SCREENSHOTS": "false",
+                },
+            ):
+                self.assertEqual(main(["--debug-screens", "sessions"]), 0)
+                self.assertEqual(os.environ["ARGUS_DEBUG_SCREENSHOTS"], "true")
 
     def test_sessions_command_does_not_load_model_or_audio_runtime(self):
         with tempfile.TemporaryDirectory() as temp_dir:

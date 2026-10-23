@@ -120,8 +120,15 @@ def _screen_check() -> DoctorCheck:
 
 
 def _input_check() -> DoctorCheck:
-    if platform.system() == "Linux" and (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("XDG_SESSION_TYPE", "").casefold() == "wayland"):
-        return DoctorCheck("Mouse and keyboard", "fail", "Global input automation is unavailable in this Wayland session; use an X11 session or a supported desktop backend.")
+    system = platform.system()
+    if system == "Linux" and (os.environ.get("WAYLAND_DISPLAY") or os.environ.get("XDG_SESSION_TYPE", "").casefold() == "wayland"):
+        return DoctorCheck("Mouse and keyboard", "skip", "Screen control currently requires the Windows desktop backend; text mode and app launching remain available.")
+    if system != "Windows":
+        return DoctorCheck(
+            "Mouse and keyboard",
+            "skip",
+            "Window focus, capture, and screen input currently use the Windows desktop backend; app launching and text mode remain available.",
+        )
     try:
         import pyautogui
 
@@ -130,8 +137,6 @@ def _input_check() -> DoctorCheck:
         return DoctorCheck("Mouse and keyboard", "fail", "The input automation package is not installed; install the desktop tools extra.")
     except Exception as exc:
         return DoctorCheck("Mouse and keyboard", "fail", f"Input toolkit unavailable ({type(exc).__name__}); check desktop permissions.")
-    if platform.system() == "Darwin":
-        return DoctorCheck("Mouse and keyboard", "skip", "Toolkit can read the pointer; grant Accessibility permission and validate input manually.")
     return DoctorCheck("Mouse and keyboard", "ok", "Toolkit can read the pointer; doctor did not send a click or keystroke.")
 
 

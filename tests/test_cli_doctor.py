@@ -31,6 +31,18 @@ class DoctorTests(unittest.TestCase):
         fake_input.write.assert_not_called()
         fake_input.press.assert_not_called()
 
+    def test_input_diagnostic_reports_non_windows_screen_control_as_unavailable(self):
+        fake_input = SimpleNamespace(position=Mock(), click=Mock(), write=Mock(), press=Mock())
+        with patch.dict(sys.modules, {"pyautogui": fake_input}):
+            with patch("cli.doctor.platform.system", return_value="Darwin"):
+                check = _input_check()
+        self.assertEqual(check.status, "skip")
+        self.assertIn("Windows desktop backend", check.detail)
+        fake_input.position.assert_not_called()
+        fake_input.click.assert_not_called()
+        fake_input.write.assert_not_called()
+        fake_input.press.assert_not_called()
+
     def test_sqlite_diagnostic_checks_writability_without_creating_a_session_db(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             database_path = Path(temp_dir) / "state" / "sessions.sqlite3"
