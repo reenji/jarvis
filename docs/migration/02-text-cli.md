@@ -52,8 +52,8 @@ use the repository's established environment setup to supply runtime packages.
 
 ## Remaining Phase 2 parity work
 
-The terminal parity follow-up is in progress. The eye banner, formatted
-responses and tool log lines, and `-q`/`--continue` shortcuts are implemented.
-Before Phase 7, finish live response streaming, prompt history and slash
-completion, and cancellation of an in-progress turn without corrupting its
-saved session history.
+The terminal parity follow-up is in progress. The eye banner, formatted and
+streamed responses, tool log lines, and `-q`/`--continue` shortcuts are
+implemented. Before Phase 7, finish prompt history and slash completion, and
+cancellation of an in-progress turn without corrupting its saved session
+history.

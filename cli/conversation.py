@@ -7,6 +7,7 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 from cli.client import TerminalClient
@@ -132,8 +133,74 @@ class TextConversation:
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
         )
 
-    async def _generate(self):
+    async def _generate(self, *, on_text=None):
         config = self._generate_config()
+        if on_text is None:
+            return await self._generate_non_streaming(config)
+
+        async_client = getattr(self._model_client, "aio", None)
+        models = getattr(async_client, "models", None)
+        stream_factory = getattr(models, "generate_content_stream", None)
+        if not callable(stream_factory):
+            response = await self._generate_non_streaming(config)
+            content = self._candidate_content(response)
+            answer_text = self._response_text(response, content)
+            if answer_text:
+                on_text(answer_text)
+            return response
+
+        stream = await stream_factory(
+            model=self.model,
+            contents=self.history,
+            config=config,
+        )
+        text_chunks: list[str] = []
+        function_calls: dict[tuple[str | None, str], dict[str, Any]] = {}
+        other_parts = []
+        role = "model"
+        async for chunk in stream:
+            content = self._candidate_content(chunk)
+            if content is not None:
+                role = str(getattr(content, "role", None) or role)
+            chunk_text = str(getattr(chunk, "text", None) or "")
+            if not chunk_text and content is not None:
+                chunk_text = "\n".join(
+                    str(getattr(part, "text", "") or "")
+                    for part in (getattr(content, "parts", None) or [])
+                    if getattr(part, "text", None)
+                )
+            if chunk_text:
+                text_chunks.append(chunk_text)
+                on_text(chunk_text)
+            for part in (getattr(content, "parts", None) or []) if content is not None else []:
+                function_call = getattr(part, "function_call", None)
+                if function_call is not None and getattr(function_call, "name", None):
+                    key = (getattr(function_call, "id", None), str(function_call.name))
+                    entry = function_calls.setdefault(
+                        key,
+                        {"name": str(function_call.name), "args": {}},
+                    )
+                    entry["args"].update(dict(getattr(function_call, "args", None) or {}))
+                elif not getattr(part, "text", None):
+                    other_parts.append(part)
+
+        full_text = "".join(text_chunks).strip()
+        parts = []
+        if full_text:
+            parts.append(self._types.Part(text=full_text))
+        for (call_id, _name), value in function_calls.items():
+            call_fields = {"name": value["name"], "args": value["args"]}
+            if call_id:
+                call_fields["id"] = call_id
+            parts.append(self._types.Part(function_call=self._types.FunctionCall(**call_fields)))
+        parts.extend(other_parts)
+        combined = self._types.Content(role=role, parts=parts)
+        return SimpleNamespace(
+            text=full_text or None,
+            candidates=[SimpleNamespace(content=combined)],
+        )
+
+    async def _generate_non_streaming(self, config):
         return await asyncio.to_thread(
             self._model_client.models.generate_content,
             model=self.model,
@@ -185,7 +252,7 @@ class TextConversation:
             self.terminal.write_log(f"ERR: {name} — {str(exc)[:180]}")
             return {"error": f"{type(exc).__name__}: {str(exc)[:300]}"}
 
-    async def ask(self, text: str) -> str:
+    async def ask(self, text: str, *, on_text=None) -> str:
         user_text = str(text or "").strip()
         if not user_text:
             raise ValueError("A pergunta não pode estar vazia.")
@@ -197,7 +264,7 @@ class TextConversation:
         self._save_history()
 
         for _round in range(self.MAX_TOOL_ROUNDS + 1):
-            response = await self._generate()
+            response = await self._generate(on_text=on_text)
             content = self._candidate_content(response)
             if content is None:
                 raise RuntimeError("O Gemini retornou uma resposta sem conteúdo.")

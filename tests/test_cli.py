@@ -368,6 +368,138 @@ class TextConversationTests(unittest.TestCase):
         self.assertTrue(first_config.automatic_function_calling.disable)
         self.assertEqual(first_config.tools[0].function_declarations[0].name, "open_app")
 
+    def test_text_turn_streams_chunks_and_persists_the_complete_response(self):
+        class StreamingModels:
+            def __init__(self):
+                self.responses = [
+                    [
+                        SimpleNamespace(
+                            text="A calm ",
+                            candidates=[
+                                SimpleNamespace(
+                                    content=types.Content(
+                                        role="model",
+                                        parts=[types.Part(text="A calm ")],
+                                    )
+                                )
+                            ],
+                        ),
+                        SimpleNamespace(
+                            text="answer.",
+                            candidates=[
+                                SimpleNamespace(
+                                    content=types.Content(
+                                        role="model",
+                                        parts=[types.Part(text="answer.")],
+                                    )
+                                )
+                            ],
+                        ),
+                    ]
+                ]
+
+            async def generate_content_stream(self, **_kwargs):
+                chunks = self.responses.pop(0)
+
+                async def stream():
+                    for chunk in chunks:
+                        yield chunk
+
+                return stream()
+
+        client = SimpleNamespace(
+            models=SimpleNamespace(generate_content=Mock()),
+            aio=SimpleNamespace(models=StreamingModels()),
+        )
+        conversation = TextConversation(
+            self.session_id,
+            self.store,
+            client=client,
+            registry=FakeRegistry(),
+            system_instruction="test system instruction",
+        )
+        streamed = []
+
+        answer = asyncio.run(conversation.ask("Give me a calm answer.", on_text=streamed.append))
+
+        self.assertEqual(answer, "A calm answer.")
+        self.assertEqual(streamed, ["A calm ", "answer."])
+        saved = self.store.load_history(self.session_id)
+        self.assertEqual(saved[-1]["parts"][0]["text"], "A calm answer.")
+
+    def test_streamed_function_call_is_executed_once_before_streaming_the_answer(self):
+        class StreamingModels:
+            def __init__(self):
+                self.responses = [
+                    [
+                        SimpleNamespace(
+                            text=None,
+                            candidates=[
+                                SimpleNamespace(
+                                    content=types.Content(
+                                        role="model",
+                                        parts=[
+                                            types.Part(
+                                                function_call=types.FunctionCall(
+                                                    id="call-1",
+                                                    name="open_app",
+                                                    args={"app_name": "Calculator"},
+                                                )
+                                            )
+                                        ],
+                                    )
+                                )
+                            ],
+                        )
+                    ],
+                    [
+                        SimpleNamespace(
+                            text="Calculator is open.",
+                            candidates=[
+                                SimpleNamespace(
+                                    content=types.Content(
+                                        role="model",
+                                        parts=[types.Part(text="Calculator is open.")],
+                                    )
+                                )
+                            ],
+                        )
+                    ],
+                ]
+
+            async def generate_content_stream(self, **_kwargs):
+                chunks = self.responses.pop(0)
+
+                async def stream():
+                    for chunk in chunks:
+                        yield chunk
+
+                return stream()
+
+        registry = FakeRegistry()
+        client = SimpleNamespace(
+            models=SimpleNamespace(generate_content=Mock()),
+            aio=SimpleNamespace(models=StreamingModels()),
+        )
+        conversation = TextConversation(
+            self.session_id,
+            self.store,
+            client=client,
+            registry=registry,
+            system_instruction="test system instruction",
+        )
+        streamed = []
+
+        answer = asyncio.run(conversation.ask("Open Calculator", on_text=streamed.append))
+
+        self.assertEqual(answer, "Calculator is open.")
+        self.assertEqual(streamed, ["Calculator is open."])
+        registry.execute.assert_awaited_once_with(
+            name="open_app",
+            ctx=conversation._tool_context,
+            args={"app_name": "Calculator"},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

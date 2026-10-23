@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+from contextlib import contextmanager
 from collections.abc import Callable
 from typing import Any
 
@@ -95,3 +96,26 @@ class TerminalUI:
                 padding=(0, 1),
             )
         )
+
+    @contextmanager
+    def response_stream(self):
+        """Show a temporary live Markdown preview while Gemini is responding."""
+        if self.console is None or not self.console.is_terminal:
+            yield lambda _chunk: None
+            return
+
+        from rich.live import Live
+        from rich.markdown import Markdown
+
+        buffer = []
+        with Live(
+            Markdown(""),
+            console=self.console,
+            transient=True,
+            refresh_per_second=12,
+        ) as live:
+            def update(chunk: str) -> None:
+                buffer.append(str(chunk))
+                live.update(Markdown("".join(buffer)), refresh=True)
+
+            yield update

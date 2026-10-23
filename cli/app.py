@@ -218,7 +218,8 @@ async def _interactive(store: SessionStore, session_id: str | None) -> int:
             continue
 
         try:
-            answer = await conversation.ask(text)
+            with ui.response_stream() as on_text:
+                answer = await conversation.ask(text, on_text=on_text)
         except Exception as exc:
             ui.error(f"ARGUS error: {str(exc)[:300]}")
             continue
@@ -238,7 +239,8 @@ async def _ask_once(store: SessionStore, prompt: str, session_id: str | None) ->
             title=prompt[:120],
             terminal=terminal,
         )
-        answer = await conversation.ask(prompt)
+        with ui.response_stream() as on_text:
+            answer = await conversation.ask(prompt, on_text=on_text)
     except Exception as exc:
         ui.error(f"ARGUS error: {str(exc)[:300]}")
         return 1

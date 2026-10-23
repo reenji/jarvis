@@ -10,7 +10,7 @@ Migration plan source: attached PDF, reviewed before implementation.
 |---|---|---|
 | 0. Repository inventory | Complete | Documentation only; no runtime code changed. |
 | 1. Core boundaries | Complete | Split required conversation events from optional desktop controls; keep adapter compatibility. |
-| 2. Text CLI and sessions | In progress | Text turns and SQLite sessions work. The eye banner, Rich-formatted responses/tool lines, and `-q`/`--continue` are implemented; streaming, prompt history/completion, and safe turn cancellation remain before Phase 7. |
+| 2. Text CLI and sessions | In progress | Text turns and SQLite sessions work. The eye banner, Rich-formatted/streamed responses, tool lines, and `-q`/`--continue` are implemented; prompt history/completion and safe turn cancellation remain before Phase 7. |
 | 3. Setup, configuration, and doctor | Implemented | Adds hidden-key setup, private user config, redacted config commands, and local/API diagnostics. Clean-install verification depends on Phase 6 packaging. PR is stacked on Phase 2. |
 | 4. Desktop tools | Implemented; desktop validation pending | Bounded Windows screen control, terminal protection, app focus delay, sensitive-share guard, anti-bot stop, and opt-in local debug screenshots. |
 | 5. Optional voice | Implemented; live hardware validation pending | Adds Gemini Live terminal mode, saved default-mode preference, full-turn transcripts, lazy audio loading, and text fallback when audio support or devices are unavailable. |
