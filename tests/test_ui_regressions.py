@@ -861,7 +861,7 @@ class UIRegressionTests(unittest.TestCase):
         self.assertEqual(client.aio.models.generate_content.await_count, 1)
 
     def test_time_aware_greeting_boundaries(self):
-        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 5)).startswith("Good morning."))
+        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 5)).startswith("Bom dia."))
         self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 12)).startswith("Good afternoon."))
         self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 18)).startswith("Good evening."))
 
