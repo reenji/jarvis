@@ -88,6 +88,7 @@ class QAModeSafetyTests(unittest.TestCase):
 
         argus = main.ArgusLive.__new__(main.ArgusLive)
         argus.ui = SimpleNamespace(interaction_gated=False)
+        argus.client = argus.ui
         call = SimpleNamespace(
             id="qa-call",
             call_id=None,
@@ -102,6 +103,7 @@ class QAModeSafetyTests(unittest.TestCase):
 
         argus = main.ArgusLive.__new__(main.ArgusLive)
         argus.ui = SimpleNamespace(interaction_gated=False, operational_ready=False)
+        argus.client = argus.ui
         call = SimpleNamespace(
             id="startup-call",
             call_id=None,
@@ -145,6 +147,7 @@ class QAModeSafetyTests(unittest.TestCase):
         commands = []
         argus = main.ArgusLive.__new__(main.ArgusLive)
         argus.ui = SimpleNamespace(handle_ui_command=commands.append)
+        argus.client = argus.ui
 
         argus._queue_self_quit_after_farewell()
         self.assertFalse(argus._complete_self_quit_after_audio())
