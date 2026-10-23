@@ -165,10 +165,19 @@ class SessionStoreTests(unittest.TestCase):
         terminal.write_log("SYS: Opening Calculator.")
         terminal.write_log("ERR: Tool failed.")
 
-        self.assertIn("(o) ARGUS", output[0])
-        self.assertIn("ARGUS> **Ready**", output[1])
-        self.assertEqual(output[2], "[ARGUS] Opening Calculator.")
+        self.assertIn(".---.", output[0])
+        self.assertIn("ARGUS CLI v", output[1])
+        self.assertIn("ARGUS> **Ready**", output[2])
+        self.assertEqual(output[3], "[ARGUS] Opening Calculator.")
         self.assertEqual(errors, ["[ARGUS] Tool failed."])
+
+    def test_eye_banner_fits_the_terminal_budget_and_uses_ascii(self):
+        from cli.banner import EYE_BANNER
+
+        lines = EYE_BANNER.splitlines()
+        self.assertLessEqual(len(lines), 12)
+        self.assertLessEqual(max(map(len, lines)), 60)
+        self.assertTrue(EYE_BANNER.isascii())
 
     def test_terminal_ui_renders_markdown_with_rich_when_available(self):
         from rich.console import Console
