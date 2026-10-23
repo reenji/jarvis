@@ -330,7 +330,7 @@ class QAModeSafetyTests(unittest.TestCase):
 
         detection = config.realtime_input_config.automatic_activity_detection
         self.assertEqual(detection.silence_duration_ms, main.LIVE_VAD_SILENCE_MS)
-        self.assertEqual(main.LIVE_VAD_SILENCE_MS, 200)
+        self.assertEqual(main.LIVE_VAD_SILENCE_MS, main.DEFAULT_VAD_SILENCE_MS)
         self.assertEqual(config.thinking_config.thinking_budget, 0)
         self.assertEqual(
             detection.start_of_speech_sensitivity,
@@ -340,6 +340,41 @@ class QAModeSafetyTests(unittest.TestCase):
             detection.end_of_speech_sensitivity,
             main.types.EndSensitivity.END_SENSITIVITY_HIGH,
         )
+
+    def test_live_config_uses_saved_vad_silence_preference(self):
+        import main
+
+        argus = main.ArgusLive.__new__(main.ArgusLive)
+        argus.voice_name = "charon"
+        with (
+            patch.object(main, "load_voice_preferences", return_value={"vad_silence_ms": 500}),
+            patch.object(main, "load_memory", return_value={}),
+            patch.object(main, "format_memory_for_prompt", return_value=""),
+            patch.object(main, "_load_system_prompt", return_value="test prompt"),
+        ):
+            config = argus._build_config()
+
+        detection = config.realtime_input_config.automatic_activity_detection
+        self.assertEqual(detection.silence_duration_ms, 500)
+        self.assertEqual(main.LIVE_VAD_SILENCE_MS, 700)
+
+    def test_live_config_clamps_vad_preference_to_supported_range(self):
+        import main
+
+        argus = main.ArgusLive.__new__(main.ArgusLive)
+        argus.voice_name = "charon"
+        for requested_ms, expected_ms in ((100, 500), (5000, 1200), ("invalid", 700)):
+            with (
+                self.subTest(requested_ms=requested_ms),
+                patch.object(main, "load_voice_preferences", return_value={"vad_silence_ms": requested_ms}),
+                patch.object(main, "load_memory", return_value={}),
+                patch.object(main, "format_memory_for_prompt", return_value=""),
+                patch.object(main, "_load_system_prompt", return_value="test prompt"),
+            ):
+                config = argus._build_config()
+
+            detection = config.realtime_input_config.automatic_activity_detection
+            self.assertEqual(detection.silence_duration_ms, expected_ms)
 
 
 class QAReportTests(unittest.TestCase):
