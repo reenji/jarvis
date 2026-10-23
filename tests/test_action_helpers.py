@@ -500,9 +500,12 @@ class ActionHelperTests(unittest.TestCase):
         self.assertIn("Playing", result)
         self.assertEqual(script.call_args.args[1], "spotify:track:123456")
 
-    def test_web_search_formatter_handles_empty_results(self):
-        result = web_search._format_ddg("missing query", [])
-        self.assertIn("No", result)
+    def test_web_search_formatter_keeps_answer_without_grounded_sources(self):
+        result = web_search._format_grounded_answer(
+            "Gemini answered without citing sources.",
+            [],
+        )
+        self.assertEqual(result, "Gemini answered without citing sources.")
 
     def test_outgoing_message_normalization_adds_terminal_punctuation(self):
         normalized = send_message.normalize_outgoing_message_text("hello there")
