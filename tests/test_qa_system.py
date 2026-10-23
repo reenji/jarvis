@@ -341,6 +341,23 @@ class QAModeSafetyTests(unittest.TestCase):
             main.types.EndSensitivity.END_SENSITIVITY_HIGH,
         )
 
+    def test_live_config_uses_saved_vad_silence_preference(self):
+        import main
+
+        argus = main.ArgusLive.__new__(main.ArgusLive)
+        argus.voice_name = "charon"
+        with (
+            patch.object(main, "load_voice_preferences", return_value={"vad_silence_ms": 500}),
+            patch.object(main, "load_memory", return_value={}),
+            patch.object(main, "format_memory_for_prompt", return_value=""),
+            patch.object(main, "_load_system_prompt", return_value="test prompt"),
+        ):
+            config = argus._build_config()
+
+        detection = config.realtime_input_config.automatic_activity_detection
+        self.assertEqual(detection.silence_duration_ms, 500)
+        self.assertEqual(main.LIVE_VAD_SILENCE_MS, 700)
+
 
 class QAReportTests(unittest.TestCase):
     def test_report_redacts_api_keys_and_token_fields(self):
