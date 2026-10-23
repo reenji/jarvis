@@ -67,6 +67,21 @@ class SessionStoreTests(unittest.TestCase):
         run_voice.assert_called_once_with()
         store.assert_not_called()
 
+    def test_explicit_voice_command_falls_back_to_text_when_audio_is_unavailable(self):
+        from cli.voice import VOICE_UNAVAILABLE
+
+        store = object()
+        with patch("cli.voice.run_voice", return_value=VOICE_UNAVAILABLE):
+            with patch("cli.app.SessionStore", return_value=store):
+                with patch("cli.app._interactive", new_callable=AsyncMock, return_value=0) as chat:
+                    with patch("builtins.print") as output:
+                        self.assertEqual(main(["voice"]), 0)
+
+        chat.assert_awaited_once_with(store, None)
+        output.assert_any_call(
+            "Voz indisponível; iniciando uma sessão de texto. Instale o extra [voice] para habilitar o áudio."
+        )
+
     def test_no_subcommand_uses_saved_voice_preference_but_chat_forces_text(self):
         with patch("cli.app._default_voice_enabled", return_value=True) as preference:
             with patch("cli.app._run_voice", return_value=0) as run_voice:
@@ -85,6 +100,18 @@ class SessionStoreTests(unittest.TestCase):
                 with patch("cli.app.asyncio.run", side_effect=close_interactive):
                     self.assertEqual(main(["chat"]), 0)
         preference.assert_not_called()
+
+    def test_saved_voice_default_falls_back_to_text_when_audio_is_unavailable(self):
+        from cli.voice import VOICE_UNAVAILABLE
+
+        store = object()
+        with patch("cli.app._default_voice_enabled", return_value=True):
+            with patch("cli.voice.run_voice", return_value=VOICE_UNAVAILABLE):
+                with patch("cli.app.SessionStore", return_value=store):
+                    with patch("cli.app._interactive", new_callable=AsyncMock, return_value=0) as chat:
+                        self.assertEqual(main([]), 0)
+
+        chat.assert_awaited_once_with(store, None)
 
     def test_voice_terminal_client_prints_complete_transcripts_and_system_logs(self):
         from cli.voice import VoiceTerminalClient
