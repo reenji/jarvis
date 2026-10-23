@@ -133,6 +133,51 @@ class SessionStoreTests(unittest.TestCase):
         self.assertIn("Opening Calculator.", rendered)
         self.assertIn("Tool failed.", errors.getvalue())
 
+    def test_interactive_prompt_reuses_file_history_with_private_permissions(self):
+        from prompt_toolkit.history import FileHistory
+
+        from cli.prompt import InteractivePrompt
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "nested" / "prompt-history"
+
+            class RecordingSession:
+                def __init__(self):
+                    self.history = FileHistory(str(path))
+                    self.calls = 0
+
+                def prompt(self, _message):
+                    self.calls += 1
+                    self.history.append_string(f"turn {self.calls}")
+                    return f"turn {self.calls}"
+
+            session = RecordingSession()
+            prompt = InteractivePrompt(
+                history_path=path,
+                session_factory=lambda _path: session,
+                interactive=True,
+            )
+
+            self.assertEqual(prompt.prompt("You> "), "turn 1")
+            self.assertEqual(prompt.prompt("You> "), "turn 2")
+            self.assertEqual(session.history.get_strings(), ["turn 1", "turn 2"])
+            self.assertTrue(path.exists())
+            if os.name != "nt":
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_interactive_prompt_completes_slash_commands(self):
+        from prompt_toolkit.completion import CompleteEvent
+        from prompt_toolkit.document import Document
+
+        from cli.prompt import InteractivePrompt, create_slash_completer
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            completer = create_slash_completer()
+            completions = list(
+                completer.get_completions(Document("/he"), CompleteEvent())
+            )
+        self.assertEqual([item.text for item in completions], ["/help"])
+
     def test_voice_command_dispatches_without_opening_text_session_storage(self):
         with patch("cli.app._run_voice", return_value=0) as run_voice:
             with patch("cli.app.SessionStore") as store:

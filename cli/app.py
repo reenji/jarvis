@@ -97,14 +97,6 @@ def _new_conversation(
     return TextConversation(resolved, store, terminal=terminal)
 
 
-def _read_prompt(prompt: str) -> str:
-    try:
-        from prompt_toolkit import prompt as prompt_toolkit_prompt
-    except ImportError:
-        return input(prompt)
-    return prompt_toolkit_prompt(prompt)
-
-
 def _run_voice() -> int:
     # Keep microphone and live-model imports out of every text-only command.
     from cli.voice import VOICE_UNAVAILABLE, run_voice
@@ -134,10 +126,12 @@ def _default_voice_enabled() -> bool:
 
 async def _interactive(store: SessionStore, session_id: str | None) -> int:
     from cli.client import TerminalClient
+    from cli.prompt import InteractivePrompt
     from cli.terminal_ui import TerminalUI
 
     ui = TerminalUI()
     terminal = TerminalClient(output=ui.system, error=ui.error)
+    prompter = InteractivePrompt()
     try:
         conversation = _new_conversation(store, session_id, terminal=terminal)
     except (ValueError, KeyError) as exc:
@@ -148,7 +142,7 @@ async def _interactive(store: SessionStore, session_id: str | None) -> int:
     ui.info(f"ARGUS text session {conversation.session_id[:12]}. Type /help for commands.")
     while True:
         try:
-            text = _read_prompt("You> ").strip()
+            text = prompter.prompt("You> ").strip()
         except (EOFError, KeyboardInterrupt):
             ui.info("\nARGUS session saved.")
             return 0

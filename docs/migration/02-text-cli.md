@@ -44,6 +44,10 @@ The application requests owner-only directory and file permissions on systems
 that support POSIX modes. On Windows it relies on the user's profile ACL.
 Deleting a session removes its stored history from the database.
 
+Interactive prompt history is stored in a separate `prompt-history` file next
+to the session database. It is used for arrow-key recall and remains private to
+the current user; slash commands are completed as they are typed.
+
 The CLI imports the Google client and tool registry only when starting a
 conversation. Listing and deleting saved sessions do not initialize Gemini or
 audio devices. Audio remains outside this phase and is not needed for text mode.
@@ -53,7 +57,7 @@ use the repository's established environment setup to supply runtime packages.
 ## Remaining Phase 2 parity work
 
 The terminal parity follow-up is in progress. The eye banner, formatted and
-streamed responses, tool log lines, and `-q`/`--continue` shortcuts are
-implemented. Before Phase 7, finish prompt history and slash completion, and
+streamed responses, tool log lines, `-q`/`--continue` shortcuts, prompt
+history, and slash completion are implemented. Before Phase 7, finish
 cancellation of an in-progress turn without corrupting its saved session
 history.
