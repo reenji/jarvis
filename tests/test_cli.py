@@ -1,6 +1,7 @@
 import asyncio
 import os
 import sqlite3
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -57,6 +58,113 @@ class SessionStoreTests(unittest.TestCase):
         self.assertEqual(parser.parse_args(["chat", "--resume", "abc"]).session, "abc")
         self.assertEqual(parser.parse_args(["sessions", "--limit", "5"]).limit, 5)
         self.assertTrue(parser.parse_args(["--debug-screens", "ask", "hello"]).debug_screens)
+        self.assertEqual(parser.parse_args(["voice"]).command, "voice")
+
+    def test_voice_command_dispatches_without_opening_text_session_storage(self):
+        with patch("cli.app._run_voice", return_value=0) as run_voice:
+            with patch("cli.app.SessionStore") as store:
+                self.assertEqual(main(["voice"]), 0)
+        run_voice.assert_called_once_with()
+        store.assert_not_called()
+
+    def test_no_subcommand_uses_saved_voice_preference_but_chat_forces_text(self):
+        with patch("cli.app._default_voice_enabled", return_value=True) as preference:
+            with patch("cli.app._run_voice", return_value=0) as run_voice:
+                with patch("cli.app.SessionStore") as store:
+                    self.assertEqual(main([]), 0)
+        preference.assert_called_once_with()
+        run_voice.assert_called_once_with()
+        store.assert_not_called()
+
+        def close_interactive(coroutine):
+            coroutine.close()
+            return 0
+
+        with patch("cli.app._default_voice_enabled") as preference:
+            with patch("cli.app.SessionStore", return_value=object()):
+                with patch("cli.app.asyncio.run", side_effect=close_interactive):
+                    self.assertEqual(main(["chat"]), 0)
+        preference.assert_not_called()
+
+    def test_voice_terminal_client_prints_complete_transcripts_and_system_logs(self):
+        from cli.voice import VoiceTerminalClient
+
+        output = []
+        client = VoiceTerminalClient(output=output.append)
+        client.write_log("You: Abra o Spotify")
+        client.show_subtitle("A música")
+        client.show_subtitle(" está tocando.")
+        client.write_log("Argus: A música está tocando.")
+        client.write_log("SYS: Gemini Live connected.")
+        self.assertEqual(
+            output,
+            ["Você> Abra o Spotify", "ARGUS> A música está tocando.", "[ARGUS] Gemini Live connected."],
+        )
+
+    def test_voice_mode_explains_optional_audio_dependency_without_importing_desktop_app(self):
+        from cli.voice import run_voice
+
+        output = []
+        with patch("cli.voice.importlib.util.find_spec", return_value=None):
+            result = run_voice(output=output.append, audio_available=lambda: False)
+        self.assertEqual(result, 2)
+        self.assertTrue(any("requirements-desktop.txt" in line for line in output))
+
+    def test_voice_mode_uses_saved_settings_and_closes_cleanly_on_interrupt(self):
+        from cli.voice import VoiceTerminalClient, run_voice
+
+        class FakeAssistant:
+            def __init__(self, client, voice_name, *, api_key):
+                self.client = client
+                self.voice_name = voice_name
+                self.api_key = api_key
+                self.stopped = False
+
+            async def run(self):
+                await asyncio.sleep(0)
+
+            def request_shutdown(self):
+                self.stopped = True
+
+        settings = SimpleNamespace(voice=SimpleNamespace(name="kore"))
+        created = []
+
+        def factory(*args, **kwargs):
+            assistant = FakeAssistant(*args, **kwargs)
+            created.append(assistant)
+            return assistant
+
+        def interrupted(coroutine):
+            coroutine.close()
+            raise KeyboardInterrupt
+
+        output = []
+        result = run_voice(
+            output=output.append,
+            live_factory=factory,
+            settings_loader=lambda: settings,
+            api_key_loader=lambda: "fake-key",
+            async_runner=interrupted,
+        )
+        self.assertEqual(result, 130)
+        self.assertEqual(created[0].voice_name, "kore")
+        self.assertEqual(created[0].api_key, "fake-key")
+        self.assertIsInstance(created[0].client, VoiceTerminalClient)
+        self.assertTrue(created[0].stopped)
+        self.assertIn("ARGUS voice session ended.", output)
+
+    def test_voice_mode_handles_engine_initialization_errors_without_traceback(self):
+        from cli.voice import run_voice
+
+        output = []
+        result = run_voice(
+            output=output.append,
+            live_factory=Mock(side_effect=RuntimeError("private provider detail")),
+            settings_loader=lambda: SimpleNamespace(voice=SimpleNamespace(name="kore")),
+            api_key_loader=lambda: "fake-key",
+        )
+        self.assertEqual(result, 2)
+        self.assertEqual(output, ["Could not initialize voice mode (RuntimeError)."])
 
     def test_debug_screens_flag_enables_private_screenshot_mode(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -74,8 +182,9 @@ class SessionStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             from unittest.mock import patch
 
-            with patch.dict(os.environ, {"ARGUS_SESSION_DB": str(Path(temp_dir) / "sessions.sqlite3")}):
-                self.assertEqual(main(["sessions"]), 0)
+            with patch.dict(sys.modules, {"main": None, "sounddevice": None}):
+                with patch.dict(os.environ, {"ARGUS_SESSION_DB": str(Path(temp_dir) / "sessions.sqlite3")}):
+                    self.assertEqual(main(["sessions"]), 0)
 
 
 class FakeRegistry:
