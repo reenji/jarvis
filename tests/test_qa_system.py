@@ -330,7 +330,7 @@ class QAModeSafetyTests(unittest.TestCase):
 
         detection = config.realtime_input_config.automatic_activity_detection
         self.assertEqual(detection.silence_duration_ms, main.LIVE_VAD_SILENCE_MS)
-        self.assertEqual(main.LIVE_VAD_SILENCE_MS, 200)
+        self.assertEqual(main.LIVE_VAD_SILENCE_MS, main.DEFAULT_VAD_SILENCE_MS)
         self.assertEqual(config.thinking_config.thinking_budget, 0)
         self.assertEqual(
             detection.start_of_speech_sensitivity,
