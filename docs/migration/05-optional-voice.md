@@ -27,9 +27,11 @@ execution path and does not start a desktop window.
 
 Text commands do not import `sounddevice` or the live audio engine. If the
 audio dependency is missing, voice mode falls back to text and identifies the
-optional `voice` extra. Phase 6 packages that extra separately from the text
-CLI. The setup prompt may save a voice preference even when the optional runtime
-has not yet been installed; text remains available until audio is installed.
+optional `voice` extra. Install it with `scripts/install.sh --voice` or
+`scripts/install.ps1 -Voice`, or use the direct `pipx`/`uv` instructions in
+[Phase 6 packaging](06-packaging.md). The setup prompt may save a voice
+preference even when the optional runtime has not yet been installed; text
+remains available until audio is installed.
 
 Automated coverage uses a fake voice engine, fake settings and API-key
 providers, and captured terminal output. It verifies explicit and default
