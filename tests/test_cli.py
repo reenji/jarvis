@@ -1,4 +1,5 @@
 import asyncio
+from io import StringIO
 import os
 import sqlite3
 import sys
@@ -56,9 +57,187 @@ class SessionStoreTests(unittest.TestCase):
         parser = build_parser()
         self.assertEqual(parser.parse_args(["ask", "hello", "Argus"]).prompt, ["hello", "Argus"])
         self.assertEqual(parser.parse_args(["chat", "--resume", "abc"]).session, "abc")
+        self.assertEqual(parser.parse_args(["-q", "hello"]).quick_question, "hello")
+        self.assertTrue(parser.parse_args(["--continue"]).continue_session)
         self.assertEqual(parser.parse_args(["sessions", "--limit", "5"]).limit, 5)
         self.assertTrue(parser.parse_args(["--debug-screens", "ask", "hello"]).debug_screens)
         self.assertEqual(parser.parse_args(["voice"]).command, "voice")
+
+    def test_quick_question_can_append_to_the_most_recent_session(self):
+        store = Mock()
+        store.list.return_value = [SimpleNamespace(id="latest-session")]
+        with patch("cli.app.SessionStore", return_value=store):
+            with patch("cli.app._ask_once", new_callable=AsyncMock, return_value=0) as ask:
+                self.assertEqual(main(["-q", "  play music  ", "--continue"]), 0)
+        ask.assert_awaited_once_with(store, "play music", "latest-session")
+
+    def test_continue_resumes_the_most_recent_session_or_starts_a_new_one(self):
+        store = Mock()
+        store.list.side_effect = [
+            [SimpleNamespace(id="latest-session")],
+            [],
+        ]
+        with patch("cli.app.SessionStore", return_value=store):
+            with patch("cli.app._interactive", new_callable=AsyncMock, return_value=0) as chat:
+                self.assertEqual(main(["--continue"]), 0)
+                self.assertEqual(main(["--continue"]), 0)
+        self.assertEqual(
+            [call.args for call in chat.await_args_list],
+            [(store, "latest-session"), (store, None)],
+        )
+
+    def test_interactive_session_continues_after_a_cancelled_turn(self):
+        from contextlib import contextmanager
+
+        from cli.app import _interactive
+
+        class FakePrompt:
+            def __init__(self):
+                self.values = iter(["first request", "second request", "/exit"])
+
+            def prompt(self, _message):
+                return next(self.values)
+
+        class FakeUI:
+            def __init__(self):
+                self.messages = []
+                self.answers = []
+
+            def banner(self):
+                return None
+
+            def info(self, message):
+                self.messages.append(message)
+
+            def system(self, _message):
+                return None
+
+            def error(self, _message):
+                return None
+
+            def assistant(self, answer):
+                self.answers.append(answer)
+
+            @contextmanager
+            def response_stream(self):
+                yield lambda _chunk: None
+
+        class FakeConversation:
+            session_id = "0123456789abcdef"
+
+            def __init__(self):
+                self.calls = 0
+
+            async def ask(self, _text, *, on_text=None):
+                self.calls += 1
+                if self.calls == 1:
+                    raise asyncio.CancelledError
+                return "The second request completed."
+
+        prompt = FakePrompt()
+        ui = FakeUI()
+        conversation = FakeConversation()
+        with patch("cli.prompt.InteractivePrompt", return_value=prompt):
+            with patch("cli.terminal_ui.TerminalUI", return_value=ui):
+                with patch("cli.app._new_conversation", return_value=conversation):
+                    result = asyncio.run(_interactive(object(), None))
+
+        self.assertEqual(result, 0)
+        self.assertEqual(conversation.calls, 2)
+        self.assertTrue(any("Pedido interrompido" in message for message in ui.messages))
+        self.assertEqual(ui.answers, ["The second request completed."])
+
+    def test_quick_question_flags_cannot_be_combined_with_subcommands(self):
+        with self.assertRaises(SystemExit):
+            main(["-q", "hello", "chat"])
+
+    def test_terminal_ui_formats_banner_responses_and_tool_logs_with_plain_fallback(self):
+        from cli.client import TerminalClient
+        from cli.terminal_ui import TerminalUI
+
+        output = []
+        errors = []
+        ui = TerminalUI(output=output.append, error_output=errors.append)
+        terminal = TerminalClient(output=ui.system, error=ui.error)
+
+        ui.banner()
+        ui.assistant("**Ready**")
+        terminal.write_log("SYS: Opening Calculator.")
+        terminal.write_log("ERR: Tool failed.")
+
+        self.assertIn("(o) ARGUS", output[0])
+        self.assertIn("ARGUS> **Ready**", output[1])
+        self.assertEqual(output[2], "[ARGUS] Opening Calculator.")
+        self.assertEqual(errors, ["[ARGUS] Tool failed."])
+
+    def test_terminal_ui_renders_markdown_with_rich_when_available(self):
+        from rich.console import Console
+
+        from cli.terminal_ui import TerminalUI
+
+        output = StringIO()
+        errors = StringIO()
+        ui = TerminalUI(
+            console=Console(file=output, force_terminal=False, width=100),
+            error_console=Console(file=errors, force_terminal=False, width=100),
+        )
+
+        ui.banner()
+        ui.assistant("**Ready**")
+        ui.system("Opening Calculator.")
+        ui.error("[ARGUS] Tool failed.")
+
+        rendered = output.getvalue()
+        self.assertIn("ARGUS", rendered)
+        self.assertIn("Ready", rendered)
+        self.assertNotIn("**Ready**", rendered)
+        self.assertIn("Opening Calculator.", rendered)
+        self.assertIn("Tool failed.", errors.getvalue())
+
+    def test_interactive_prompt_reuses_file_history_with_private_permissions(self):
+        from prompt_toolkit.history import FileHistory
+
+        from cli.prompt import InteractivePrompt
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "nested" / "prompt-history"
+
+            class RecordingSession:
+                def __init__(self):
+                    self.history = FileHistory(str(path))
+                    self.calls = 0
+
+                def prompt(self, _message):
+                    self.calls += 1
+                    self.history.append_string(f"turn {self.calls}")
+                    return f"turn {self.calls}"
+
+            session = RecordingSession()
+            prompt = InteractivePrompt(
+                history_path=path,
+                session_factory=lambda _path: session,
+                interactive=True,
+            )
+
+            self.assertEqual(prompt.prompt("You> "), "turn 1")
+            self.assertEqual(prompt.prompt("You> "), "turn 2")
+            self.assertEqual(session.history.get_strings(), ["turn 1", "turn 2"])
+            self.assertTrue(path.exists())
+            if os.name != "nt":
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_interactive_prompt_completes_slash_commands(self):
+        from prompt_toolkit.completion import CompleteEvent
+        from prompt_toolkit.document import Document
+
+        from cli.prompt import InteractivePrompt, create_slash_completer
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            completer = create_slash_completer()
+            completions = list(
+                completer.get_completions(Document("/he"), CompleteEvent())
+            )
+        self.assertEqual([item.text for item in completions], ["/help"])
 
     def test_voice_command_dispatches_without_opening_text_session_storage(self):
         with patch("cli.app._run_voice", return_value=0) as run_voice:
@@ -294,6 +473,176 @@ class TextConversationTests(unittest.TestCase):
         first_config = models.generate_content.call_args_list[0].kwargs["config"]
         self.assertTrue(first_config.automatic_function_calling.disable)
         self.assertEqual(first_config.tools[0].function_declarations[0].name, "open_app")
+
+    def test_text_turn_streams_chunks_and_persists_the_complete_response(self):
+        class StreamingModels:
+            def __init__(self):
+                self.responses = [
+                    [
+                        SimpleNamespace(
+                            text="A calm ",
+                            candidates=[
+                                SimpleNamespace(
+                                    content=types.Content(
+                                        role="model",
+                                        parts=[types.Part(text="A calm ")],
+                                    )
+                                )
+                            ],
+                        ),
+                        SimpleNamespace(
+                            text="answer.",
+                            candidates=[
+                                SimpleNamespace(
+                                    content=types.Content(
+                                        role="model",
+                                        parts=[types.Part(text="answer.")],
+                                    )
+                                )
+                            ],
+                        ),
+                    ]
+                ]
+
+            async def generate_content_stream(self, **_kwargs):
+                chunks = self.responses.pop(0)
+
+                async def stream():
+                    for chunk in chunks:
+                        yield chunk
+
+                return stream()
+
+        client = SimpleNamespace(
+            models=SimpleNamespace(generate_content=Mock()),
+            aio=SimpleNamespace(models=StreamingModels()),
+        )
+        conversation = TextConversation(
+            self.session_id,
+            self.store,
+            client=client,
+            registry=FakeRegistry(),
+            system_instruction="test system instruction",
+        )
+        streamed = []
+
+        answer = asyncio.run(conversation.ask("Give me a calm answer.", on_text=streamed.append))
+
+        self.assertEqual(answer, "A calm answer.")
+        self.assertEqual(streamed, ["A calm ", "answer."])
+        saved = self.store.load_history(self.session_id)
+        self.assertEqual(saved[-1]["parts"][0]["text"], "A calm answer.")
+
+    def test_streamed_function_call_is_executed_once_before_streaming_the_answer(self):
+        class StreamingModels:
+            def __init__(self):
+                self.responses = [
+                    [
+                        SimpleNamespace(
+                            text=None,
+                            candidates=[
+                                SimpleNamespace(
+                                    content=types.Content(
+                                        role="model",
+                                        parts=[
+                                            types.Part(
+                                                function_call=types.FunctionCall(
+                                                    id="call-1",
+                                                    name="open_app",
+                                                    args={"app_name": "Calculator"},
+                                                )
+                                            )
+                                        ],
+                                    )
+                                )
+                            ],
+                        )
+                    ],
+                    [
+                        SimpleNamespace(
+                            text="Calculator is open.",
+                            candidates=[
+                                SimpleNamespace(
+                                    content=types.Content(
+                                        role="model",
+                                        parts=[types.Part(text="Calculator is open.")],
+                                    )
+                                )
+                            ],
+                        )
+                    ],
+                ]
+
+            async def generate_content_stream(self, **_kwargs):
+                chunks = self.responses.pop(0)
+
+                async def stream():
+                    for chunk in chunks:
+                        yield chunk
+
+                return stream()
+
+        registry = FakeRegistry()
+        client = SimpleNamespace(
+            models=SimpleNamespace(generate_content=Mock()),
+            aio=SimpleNamespace(models=StreamingModels()),
+        )
+        conversation = TextConversation(
+            self.session_id,
+            self.store,
+            client=client,
+            registry=registry,
+            system_instruction="test system instruction",
+        )
+        streamed = []
+
+        answer = asyncio.run(conversation.ask("Open Calculator", on_text=streamed.append))
+
+        self.assertEqual(answer, "Calculator is open.")
+        self.assertEqual(streamed, ["Calculator is open."])
+        registry.execute.assert_awaited_once_with(
+            name="open_app",
+            ctx=conversation._tool_context,
+            args={"app_name": "Calculator"},
+        )
+
+    def test_cancelled_turn_rolls_back_partial_model_history(self):
+        async def run_cancelled_turn():
+            started = asyncio.Event()
+            never = asyncio.Event()
+
+            class BlockingModels:
+                async def generate_content_stream(self, **_kwargs):
+                    started.set()
+
+                    async def stream():
+                        await never.wait()
+                        yield SimpleNamespace(text="unreachable", candidates=[])
+
+                    return stream()
+
+            client = SimpleNamespace(
+                models=SimpleNamespace(generate_content=Mock()),
+                aio=SimpleNamespace(models=BlockingModels()),
+            )
+            conversation = TextConversation(
+                self.session_id,
+                self.store,
+                client=client,
+                registry=FakeRegistry(),
+                system_instruction="test system instruction",
+            )
+            request = asyncio.create_task(
+                conversation.ask("Cancel this request.", on_text=lambda _chunk: None)
+            )
+            await started.wait()
+            request.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await request
+            self.assertEqual(conversation.history, [])
+            self.assertEqual(self.store.load_history(self.session_id), [])
+
+        asyncio.run(run_cancelled_turn())
 
 
 if __name__ == "__main__":

@@ -1,7 +1,7 @@
 # CLI migration status
 
 Repository: reenji/jarvis
-Active branch: feat/cli-packaging (stacked on bugfix/voice-text-fallback)
+Active branch: feat/cli-parity (stacked on feat/cli-packaging)
 Migration plan source: attached PDF, reviewed before implementation.
 
 ## Progress
@@ -10,7 +10,7 @@ Migration plan source: attached PDF, reviewed before implementation.
 |---|---|---|
 | 0. Repository inventory | Complete | Documentation only; no runtime code changed. |
 | 1. Core boundaries | Complete | Split required conversation events from optional desktop controls; keep adapter compatibility. |
-| 2. Text CLI and sessions | Partial | Text turns and SQLite sessions work. A Phase 2 parity follow-up is still required for the eye banner, Rich streaming/tool output, `-q`/`--continue`, prompt history/completion, and cancellation behavior before Phase 7. |
+| 2. Text CLI and sessions | Implemented | Eye banner, Rich-formatted/streamed responses, tool lines, `-q`/`--continue`, private prompt history, slash completion, and incomplete-turn rollback on cancellation are implemented and covered by focused tests. Full pre-removal CI remains pending. |
 | 3. Setup, configuration, and doctor | Implemented | Adds hidden-key setup, private user config, redacted config commands, and local/API diagnostics. Clean-install verification depends on Phase 6 packaging. PR is stacked on Phase 2. |
 | 4. Desktop tools | Implemented; desktop validation pending | Bounded Windows screen control, terminal protection, app focus delay, sensitive-share guard, anti-bot stop, and opt-in local debug screenshots. |
 | 5. Optional voice | Implemented; live hardware validation pending | Adds Gemini Live terminal mode, saved default-mode preference, full-turn transcripts, lazy audio loading, and text fallback when audio support or devices are unavailable. |
@@ -29,4 +29,4 @@ Migration plan source: attached PDF, reviewed before implementation.
 
 ## Phase 0 result
 
-The repository inventory and migration decisions are committed on feat/cli-inventory. Phase 0 changed documentation only; Phase 1 defines adapter boundaries and retains the desktop and hosted clients. Phase 2 has a working text CLI and resumable sessions, with the parity items above still open. Phase 3 adds setup, configuration, and doctor in its own feature PR. Phase 4 adds bounded Windows screen interaction and safety behavior; real desktop validation remains pending. Phase 5 adds optional Gemini Live voice mode; real microphone and speaker validation remains pending. Next is packaging and installation.
+The repository inventory and migration decisions are committed on feat/cli-inventory. Phase 0 changed documentation only; Phase 1 defines adapter boundaries and retains the desktop and hosted clients. Phase 2 has a working text CLI and resumable sessions, with the parity items above still open. Phase 3 adds setup, configuration, and doctor in its own feature PR. Phase 4 adds bounded Windows screen interaction and safety behavior; real desktop validation remains pending. Phase 5 adds optional Gemini Live voice mode; real microphone and speaker validation remains pending. Phase 6 packaging is implemented on feat/cli-packaging and awaits hosted CI. Phase 7 remains deferred until parity and manual validation gates pass.

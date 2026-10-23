@@ -1,13 +1,18 @@
 # Phase 2: text CLI and sessions
 
 The `argus` console script now points to `cli.app:main`. With no subcommand it
-starts an interactive text conversation; `argus chat` does the same explicitly.
+starts the saved default mode; `argus chat` always starts a text conversation.
+Text mode shows the ARGUS eye banner, styles tool activity, and renders answers
+as Markdown in a Rich panel, with a plain-text fallback for constrained output.
 `argus ask <prompt>` sends one turn and prints the response. The one-shot form
 also prints the session ID to stderr so it can be resumed later.
 
 ## Commands
 
 - `argus chat [--session ID]` starts a new session or resumes an existing one.
+- `argus -q <prompt>` sends one prompt without entering interactive mode.
+- `argus --continue` resumes the most recently used session interactively;
+  combine it with `-q` to append one turn to that session.
 - `argus ask <prompt> [--session ID]` sends one turn, optionally appending it to
   a session.
 - `argus sessions [--limit N]` lists recent sessions.
@@ -39,6 +44,10 @@ The application requests owner-only directory and file permissions on systems
 that support POSIX modes. On Windows it relies on the user's profile ACL.
 Deleting a session removes its stored history from the database.
 
+Interactive prompt history is stored in a separate `prompt-history` file next
+to the session database. It is used for arrow-key recall and remains private to
+the current user; slash commands are completed as they are typed.
+
 The CLI imports the Google client and tool registry only when starting a
 conversation. Listing and deleting saved sessions do not initialize Gemini or
 audio devices. Audio remains outside this phase and is not needed for text mode.
@@ -47,9 +56,12 @@ use the repository's established environment setup to supply runtime packages.
 
 ## Remaining Phase 2 parity work
 
-This first pass provides usable text sessions but does not yet meet every PDF
-acceptance criterion. Before Phase 7, add the eye banner and brand candidates,
-Rich streaming and tool/source lines, `-q` and `--continue` aliases, prompt
-history and slash completion, and clean Ctrl+C cancellation of an in-progress
-tool action. Track these as a separate feature change rather than treating this
-phase as complete.
+## Phase 2 acceptance status
+
+The terminal parity work is implemented: the eye banner, formatted and
+streamed responses, tool log lines, `-q`/`--continue` shortcuts, prompt
+history, slash completion, and turn cancellation. Ctrl+C during a response
+cancels the active turn, removes that incomplete turn from saved conversation
+history, and returns to the prompt. An SDK request or tool action that is
+already running outside cancellable async code may still finish. Run the
+focused CLI tests and the full pre-removal CI gate before Phase 7.

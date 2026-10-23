@@ -20,6 +20,7 @@ dependencies = [
     "PyYAML>=6,<7",
     "pygetwindow",
     "pyperclip",
+    "rich>=13,<15",
     'comtypes; platform_system == "Windows"',
     'keyboard==0.13.5; platform_system == "Windows"',
     'pycaw; platform_system == "Windows"',

@@ -33,6 +33,7 @@ class CliPackagingMetadataTests(unittest.TestCase):
                 "PyYAML>=6,<7",
                 "pygetwindow",
                 "pyperclip",
+                "rich>=13,<15",
             }.issubset(dependencies)
         )
         self.assertFalse(any("PyQt" in dependency for dependency in dependencies))

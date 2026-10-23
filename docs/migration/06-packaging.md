@@ -55,8 +55,8 @@ request in that case.
 
 ## Dependency profiles
 
-The base install includes the text CLI, Gemini text SDK, terminal/configuration
-support, and the local screen, mouse, keyboard, and app-focus packages used by
+The base install includes the text CLI, Gemini text SDK, Rich terminal output,
+terminal/configuration support, and the local screen, mouse, keyboard, and app-focus packages used by
 the CLI's computer tools. Windows-only accessibility and audio-control
 libraries use platform markers. PyQt is not a base dependency.
 

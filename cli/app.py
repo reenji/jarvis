@@ -18,6 +18,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version="ARGUS CLI 0.1.0")
     parser.add_argument(
+        "-q",
+        "--question",
+        dest="quick_question",
+        metavar="TEXT",
+        help="send one prompt without entering the interactive session",
+    )
+    parser.add_argument(
+        "--continue",
+        dest="continue_session",
+        action="store_true",
+        help="resume the most recently used session",
+    )
+    parser.add_argument(
         "--debug-screens",
         action="store_true",
         help="save screen-control captures under the per-user Argus debug directory",
@@ -74,21 +87,14 @@ def _new_conversation(
     session_id: str | None,
     *,
     title: str = "New conversation",
+    terminal=None,
 ):
     from cli.conversation import TextConversation
 
     resolved = _resolve_session(store, session_id)
     if resolved is None:
         resolved = store.create(title)
-    return TextConversation(resolved, store)
-
-
-def _read_prompt(prompt: str) -> str:
-    try:
-        from prompt_toolkit import prompt as prompt_toolkit_prompt
-    except ImportError:
-        return input(prompt)
-    return prompt_toolkit_prompt(prompt)
+    return TextConversation(resolved, store, terminal=terminal)
 
 
 def _run_voice() -> int:
@@ -119,18 +125,26 @@ def _default_voice_enabled() -> bool:
 
 
 async def _interactive(store: SessionStore, session_id: str | None) -> int:
+    from cli.client import TerminalClient
+    from cli.prompt import InteractivePrompt
+    from cli.terminal_ui import TerminalUI
+
+    ui = TerminalUI()
+    terminal = TerminalClient(output=ui.system, error=ui.error)
+    prompter = InteractivePrompt()
     try:
-        conversation = _new_conversation(store, session_id)
+        conversation = _new_conversation(store, session_id, terminal=terminal)
     except (ValueError, KeyError) as exc:
-        print(str(exc), file=sys.stderr)
+        ui.error(str(exc))
         return 2
 
-    print(f"ARGUS text session {conversation.session_id[:12]}. Type /help for commands.")
+    ui.banner()
+    ui.info(f"ARGUS text session {conversation.session_id[:12]}. Type /help for commands.")
     while True:
         try:
-            text = _read_prompt("You> ").strip()
+            text = prompter.prompt("You> ").strip()
         except (EOFError, KeyboardInterrupt):
-            print("\nARGUS session saved.")
+            ui.info("\nARGUS session saved.")
             return 0
         if not text:
             continue
@@ -139,10 +153,10 @@ async def _interactive(store: SessionStore, session_id: str | None) -> int:
             command = parts[0].casefold()
             argument = parts[1].strip() if len(parts) == 2 else ""
             if command in {"/exit", "/quit"}:
-                print("ARGUS session saved.")
+                ui.info("ARGUS session saved.")
                 return 0
             if command == "/help":
-                print(
+                ui.info(
                     "/new — start a new session\n"
                     "/sessions — list saved sessions\n"
                     "/doctor — check configuration and capabilities\n"
@@ -161,64 +175,90 @@ async def _interactive(store: SessionStore, session_id: str | None) -> int:
                 run_doctor()
                 continue
             if command == "/new":
-                conversation = _new_conversation(store, None)
-                print(f"Started session {conversation.session_id[:12]}.")
+                conversation = _new_conversation(store, None, terminal=terminal)
+                ui.info(f"Started session {conversation.session_id[:12]}.")
                 continue
             if command == "/clear":
                 store.clear(conversation.session_id)
-                conversation = _new_conversation(store, conversation.session_id)
-                print("This session's conversation was cleared.")
+                conversation = _new_conversation(store, conversation.session_id, terminal=terminal)
+                ui.info("This session's conversation was cleared.")
                 continue
             if command == "/resume":
                 if not argument:
-                    print("Usage: /resume SESSION_ID")
+                    ui.info("Usage: /resume SESSION_ID")
                     continue
                 try:
-                    conversation = _new_conversation(store, argument)
+                    conversation = _new_conversation(store, argument, terminal=terminal)
                 except (ValueError, KeyError) as exc:
-                    print(str(exc))
+                    ui.error(str(exc))
                     continue
-                print(f"Resumed session {conversation.session_id[:12]}.")
+                ui.info(f"Resumed session {conversation.session_id[:12]}.")
                 continue
             if command == "/delete":
                 try:
                     target_id = _resolve_session(store, argument)
                 except ValueError as exc:
-                    print(str(exc))
+                    ui.error(str(exc))
                     continue
                 if target_id is None:
-                    print("Usage: /delete SESSION_ID")
+                    ui.info("Usage: /delete SESSION_ID")
                     continue
                 store.delete(target_id)
                 if target_id == conversation.session_id:
-                    conversation = _new_conversation(store, None)
-                print(f"Deleted session {target_id[:12]}.")
+                    conversation = _new_conversation(store, None, terminal=terminal)
+                ui.info(f"Deleted session {target_id[:12]}.")
                 continue
-            print(f"Unknown command: {command}. Type /help for available commands.")
+            ui.info(f"Unknown command: {command}. Type /help for available commands.")
             continue
 
         try:
-            answer = await conversation.ask(text)
-        except Exception as exc:
-            print(f"ARGUS error: {str(exc)[:300]}", file=sys.stderr)
+            with ui.response_stream() as on_text:
+                answer = await conversation.ask(text, on_text=on_text)
+        except asyncio.CancelledError:
+            task = asyncio.current_task()
+            if task is not None:
+                task.uncancel()
+            ui.info(
+                "\nPedido interrompido. Uma ação que já começou pode terminar; "
+                "a conversa continua."
+            )
             continue
-        print(f"ARGUS> {answer}")
+        except Exception as exc:
+            ui.error(f"ARGUS error: {str(exc)[:300]}")
+            continue
+        ui.assistant(answer)
 
 
 async def _ask_once(store: SessionStore, prompt: str, session_id: str | None) -> int:
+    from cli.client import TerminalClient
+    from cli.terminal_ui import TerminalUI
+
+    ui = TerminalUI()
+    terminal = TerminalClient(output=ui.system, error=ui.error)
     try:
-        conversation = _new_conversation(store, session_id, title=prompt[:120])
-        answer = await conversation.ask(prompt)
+        conversation = _new_conversation(
+            store,
+            session_id,
+            title=prompt[:120],
+            terminal=terminal,
+        )
+        with ui.response_stream() as on_text:
+            answer = await conversation.ask(prompt, on_text=on_text)
     except Exception as exc:
-        print(f"ARGUS error: {str(exc)[:300]}", file=sys.stderr)
+        ui.error(f"ARGUS error: {str(exc)[:300]}")
         return 1
-    print(answer)
+    ui.assistant(answer)
     print(f"Session: {conversation.session_id}", file=sys.stderr)
     return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.command is not None and (args.quick_question is not None or args.continue_session):
+        parser.error("-q/--question and --continue cannot be combined with a subcommand")
+    if args.quick_question is not None and not args.quick_question.strip():
+        parser.error("-q/--question requires non-empty text")
     if args.debug_screens:
         os.environ["ARGUS_DEBUG_SCREENSHOTS"] = "true"
 
@@ -232,7 +272,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_doctor()
     if args.command == "voice":
         return _run_voice()
-    if args.command is None:
+    if args.command is None and args.quick_question is None and not args.continue_session:
         try:
             if _default_voice_enabled():
                 return _run_voice()
@@ -255,6 +295,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     except OSError as exc:
         print(f"Could not open ARGUS session storage: {exc}", file=sys.stderr)
         return 2
+
+    if args.quick_question is not None:
+        latest = store.list(limit=1) if args.continue_session else []
+        session_id = latest[0].id if latest else None
+        return asyncio.run(_ask_once(store, args.quick_question.strip(), session_id))
+    if args.continue_session:
+        latest = store.list(limit=1)
+        session_id = latest[0].id if latest else None
+        return asyncio.run(_interactive(store, session_id))
 
     if args.command == "sessions":
         _show_sessions(store, limit=args.limit)
