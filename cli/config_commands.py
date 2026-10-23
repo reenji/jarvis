@@ -30,17 +30,20 @@ def show_config(output: Callable[[str], None] = print) -> int:
     output(f"LLM model: {os.environ.get('ARGUS_CLI_MODEL') or settings.llm.model}")
     output(f"Voice enabled: {'yes' if settings.voice.enabled else 'no'}")
     output(f"Voice name: {settings.voice.name}")
+    from cli.banner import banner_preference
+
+    output(f"Banner: {'enabled' if banner_preference() else 'disabled'}")
     return 0
 
 
 def _parse_value(key: str, value: str) -> Any:
-    if key == "voice.enabled":
+    if key in {"voice.enabled", "banner"}:
         normalized = value.strip().casefold()
         if normalized in {"true", "yes", "on", "1", "sim", "s"}:
             return True
         if normalized in {"false", "no", "off", "0", "nao", "não", "n"}:
             return False
-        raise ValueError("voice.enabled must be true or false.")
+        raise ValueError(f"{key} must be true or false.")
     if key in {"voice.name", "llm.model"}:
         cleaned = value.strip()
         if not cleaned or len(cleaned) > 120:
@@ -48,19 +51,22 @@ def _parse_value(key: str, value: str) -> Any:
         return cleaned
     if key == "llm.gemini_api_key":
         raise ValueError("Use `argus setup` to enter the Gemini key without exposing it in shell history.")
-    raise ValueError("Supported keys: voice.enabled, voice.name, llm.model.")
+    raise ValueError("Supported keys: banner, voice.enabled, voice.name, llm.model.")
 
 
 def set_config_value(key: str, value: str, output: Callable[[str], None] = print) -> int:
     try:
         parsed = _parse_value(key, value)
         config = load_user_config()
-        section_name, field_name = key.split(".", maxsplit=1)
-        section = config.setdefault(section_name, {})
-        if not isinstance(section, dict):
-            section = {}
-            config[section_name] = section
-        section[field_name] = parsed
+        if key == "banner":
+            config[key] = parsed
+        else:
+            section_name, field_name = key.split(".", maxsplit=1)
+            section = config.setdefault(section_name, {})
+            if not isinstance(section, dict):
+                section = {}
+                config[section_name] = section
+            section[field_name] = parsed
         path = save_user_config(config)
     except (ValueError, UserConfigError) as exc:
         output(str(exc))

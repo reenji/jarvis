@@ -59,6 +59,8 @@ class SessionStoreTests(unittest.TestCase):
         self.assertEqual(parser.parse_args(["chat", "--resume", "abc"]).session, "abc")
         self.assertEqual(parser.parse_args(["-q", "hello"]).quick_question, "hello")
         self.assertTrue(parser.parse_args(["--continue"]).continue_session)
+        self.assertEqual(parser.parse_args(["--resume", "abc"]).resume_session, "abc")
+        self.assertTrue(parser.parse_args(["--voice"]).voice)
         self.assertEqual(parser.parse_args(["sessions", "--limit", "5"]).limit, 5)
         self.assertTrue(parser.parse_args(["--debug-screens", "ask", "hello"]).debug_screens)
         self.assertEqual(parser.parse_args(["voice"]).command, "voice")
@@ -85,6 +87,14 @@ class SessionStoreTests(unittest.TestCase):
             [call.args for call in chat.await_args_list],
             [(store, "latest-session"), (store, None)],
         )
+
+    def test_resume_flag_opens_the_requested_session(self):
+        store = Mock()
+        store.resolve.return_value = "resolved-session"
+        with patch("cli.app.SessionStore", return_value=store):
+            with patch("cli.app._run_interactive", return_value=0) as chat:
+                self.assertEqual(main(["--resume", "resumable-prefix"]), 0)
+        chat.assert_called_once_with(store, "resolved-session", show_banner=False)
 
     def test_interactive_session_continues_after_a_cancelled_turn(self):
         from contextlib import contextmanager
@@ -147,9 +157,85 @@ class SessionStoreTests(unittest.TestCase):
         self.assertTrue(any("Pedido interrompido" in message for message in ui.messages))
         self.assertEqual(ui.answers, ["The second request completed."])
 
+    def test_one_prompt_interrupt_warns_and_leaves_the_session_open(self):
+        from cli.app import _interactive
+
+        class InterruptPrompt:
+            def __init__(self):
+                self.values = iter([KeyboardInterrupt(), "/exit"])
+                self.calls = 0
+
+            def prompt(self, _message):
+                self.calls += 1
+                value = next(self.values)
+                if isinstance(value, BaseException):
+                    raise value
+                return value
+
+        prompter = InterruptPrompt()
+        ui = Mock()
+        conversation = SimpleNamespace(session_id="session-id")
+        with patch("cli.prompt.InteractivePrompt", return_value=prompter):
+            with patch("cli.terminal_ui.TerminalUI", return_value=ui):
+                with patch("cli.app._new_conversation", return_value=conversation):
+                    self.assertEqual(
+                        asyncio.run(_interactive(object(), None, show_banner=False)),
+                        0,
+                    )
+        self.assertEqual(prompter.calls, 2)
+        ui.info.assert_any_call("\nPress Ctrl+C again or Ctrl+D to save and exit.")
+
+    def test_two_prompt_interrupts_exit_cleanly(self):
+        from cli.app import _interactive
+
+        class InterruptPrompt:
+            def prompt(self, _message):
+                raise KeyboardInterrupt
+
+        ui = Mock()
+        conversation = SimpleNamespace(session_id="session-id")
+        with patch("cli.prompt.InteractivePrompt", return_value=InterruptPrompt()):
+            with patch("cli.terminal_ui.TerminalUI", return_value=ui):
+                with patch("cli.app._new_conversation", return_value=conversation):
+                    self.assertEqual(
+                        asyncio.run(_interactive(object(), None, show_banner=False)),
+                        0,
+                    )
+        self.assertEqual(ui.info.call_count, 3)
+        ui.info.assert_called_with("\nARGUS session saved.")
+
+    def test_end_of_input_exits_cleanly(self):
+        from cli.app import _interactive
+
+        class EOFPrompt:
+            def prompt(self, _message):
+                raise EOFError
+
+        ui = Mock()
+        conversation = SimpleNamespace(session_id="session-id")
+        with patch("cli.prompt.InteractivePrompt", return_value=EOFPrompt()):
+            with patch("cli.terminal_ui.TerminalUI", return_value=ui):
+                with patch("cli.app._new_conversation", return_value=conversation):
+                    self.assertEqual(
+                        asyncio.run(_interactive(object(), None, show_banner=False)),
+                        0,
+                    )
+        ui.info.assert_called_with("\nARGUS session saved.")
+
     def test_quick_question_flags_cannot_be_combined_with_subcommands(self):
         with self.assertRaises(SystemExit):
             main(["-q", "hello", "chat"])
+
+    def test_voice_flag_dispatches_without_opening_text_session_storage(self):
+        with patch("cli.app._run_voice", return_value=0) as run_voice:
+            with patch("cli.app.SessionStore") as store:
+                self.assertEqual(main(["--voice"]), 0)
+        run_voice.assert_called_once_with(show_banner=False)
+        store.assert_not_called()
+
+    def test_voice_flag_cannot_be_combined_with_text_commands(self):
+        with self.assertRaises(SystemExit):
+            main(["--voice", "--continue"])
 
     def test_terminal_ui_formats_banner_responses_and_tool_logs_with_plain_fallback(self):
         from cli.client import TerminalClient
@@ -165,10 +251,53 @@ class SessionStoreTests(unittest.TestCase):
         terminal.write_log("SYS: Opening Calculator.")
         terminal.write_log("ERR: Tool failed.")
 
-        self.assertIn("(o) ARGUS", output[0])
-        self.assertIn("ARGUS> **Ready**", output[1])
-        self.assertEqual(output[2], "[ARGUS] Opening Calculator.")
+        self.assertIn(".---.", output[0])
+        self.assertIn("ARGUS CLI v", output[1])
+        self.assertIn("ARGUS> **Ready**", output[2])
+        self.assertEqual(output[3], "[ARGUS] Opening Calculator.")
         self.assertEqual(errors, ["[ARGUS] Tool failed."])
+
+    def test_eye_banner_fits_the_terminal_budget_and_uses_ascii(self):
+        from cli.banner import EYE_BANNER
+
+        lines = EYE_BANNER.splitlines()
+        self.assertLessEqual(len(lines), 12)
+        self.assertLessEqual(max(map(len, lines)), 60)
+        self.assertTrue(EYE_BANNER.isascii())
+
+    def test_banner_visibility_obeys_terminal_flag_environment_and_user_config(self):
+        from cli.banner import should_show_banner
+
+        class TTY(StringIO):
+            def isatty(self):
+                return True
+
+        terminal_input = TTY()
+        terminal_output = TTY()
+        with patch("config.user_config.load_user_config", return_value={"banner": False}):
+            self.assertFalse(
+                should_show_banner(stdin=terminal_input, stdout=terminal_output)
+            )
+            with patch.dict(os.environ, {"ARGUS_CLI_BANNER": "yes"}):
+                self.assertTrue(
+                    should_show_banner(stdin=terminal_input, stdout=terminal_output)
+                )
+        self.assertFalse(
+            should_show_banner(
+                no_banner=True,
+                stdin=terminal_input,
+                stdout=terminal_output,
+            )
+        )
+        self.assertFalse(should_show_banner(stdin=StringIO(), stdout=terminal_output))
+
+    def test_terminal_ui_honors_no_color_even_when_the_variable_is_empty(self):
+        from cli.terminal_ui import TerminalUI
+
+        with patch.dict(os.environ, {"NO_COLOR": ""}):
+            ui = TerminalUI()
+        self.assertTrue(ui.console.no_color)
+        self.assertTrue(ui.error_console.no_color)
 
     def test_terminal_ui_renders_markdown_with_rich_when_available(self):
         from rich.console import Console
@@ -238,12 +367,67 @@ class SessionStoreTests(unittest.TestCase):
                 completer.get_completions(Document("/he"), CompleteEvent())
             )
         self.assertEqual([item.text for item in completions], ["/help"])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            completer = create_slash_completer()
+            completions = list(
+                completer.get_completions(Document("/vo"), CompleteEvent())
+            )
+        self.assertEqual([item.text for item in completions], ["/voice"])
+
+    def test_interactive_voice_switch_returns_to_the_text_prompt_after_voice_ends(self):
+        from cli.app import _VoiceModeRequested, _run_interactive
+
+        prompts = []
+
+        async def fake_interactive(_store, _session_id, *, show_banner):
+            prompts.append(show_banner)
+            if len(prompts) == 1:
+                raise _VoiceModeRequested
+            return 0
+
+        with patch("cli.app._interactive", new=fake_interactive):
+            with patch("cli.app._run_voice", return_value=130) as run_voice:
+                self.assertEqual(
+                    _run_interactive(object(), None, show_banner=True),
+                    0,
+                )
+
+        self.assertEqual(prompts, [True, False])
+        run_voice.assert_called_once_with(show_banner=False, fallback_to_text=False)
+
+    def test_voice_slash_command_requests_a_mode_switch(self):
+        from cli.app import _VoiceModeRequested, _interactive
+
+        class VoicePrompt:
+            def prompt(self, _message):
+                return "/voice"
+
+        ui = Mock()
+        conversation = SimpleNamespace(session_id="session-id")
+        with patch("cli.prompt.InteractivePrompt", return_value=VoicePrompt()):
+            with patch("cli.terminal_ui.TerminalUI", return_value=ui):
+                with patch("cli.app._new_conversation", return_value=conversation):
+                    with self.assertRaises(_VoiceModeRequested):
+                        asyncio.run(_interactive(object(), None, show_banner=False))
+
+        ui.info.assert_any_call("Switching to voice mode. Press Ctrl+C to return to text.")
+
+    def test_banner_can_be_saved_as_a_top_level_user_preference(self):
+        from cli.config_commands import set_config_value
+
+        saved = {}
+        output = []
+        with patch("cli.config_commands.load_user_config", return_value=saved):
+            with patch("cli.config_commands.save_user_config", side_effect=lambda value: value):
+                self.assertEqual(set_config_value("banner", "false", output.append), 0)
+        self.assertIs(saved["banner"], False)
+        self.assertIn("Saved banner", output[0])
 
     def test_voice_command_dispatches_without_opening_text_session_storage(self):
         with patch("cli.app._run_voice", return_value=0) as run_voice:
             with patch("cli.app.SessionStore") as store:
                 self.assertEqual(main(["voice"]), 0)
-        run_voice.assert_called_once_with()
+        run_voice.assert_called_once_with(show_banner=False)
         store.assert_not_called()
 
     def test_explicit_voice_command_falls_back_to_text_when_audio_is_unavailable(self):
@@ -256,7 +440,7 @@ class SessionStoreTests(unittest.TestCase):
                     with patch("builtins.print") as output:
                         self.assertEqual(main(["voice"]), 0)
 
-        chat.assert_awaited_once_with(store, None)
+        chat.assert_awaited_once_with(store, None, show_banner=False)
         output.assert_any_call(
             "A voz não está disponível; iniciando uma sessão de texto."
         )
@@ -267,7 +451,7 @@ class SessionStoreTests(unittest.TestCase):
                 with patch("cli.app.SessionStore") as store:
                     self.assertEqual(main([]), 0)
         preference.assert_called_once_with()
-        run_voice.assert_called_once_with()
+        run_voice.assert_called_once_with(show_banner=False)
         store.assert_not_called()
 
         def close_interactive(coroutine):
@@ -290,7 +474,7 @@ class SessionStoreTests(unittest.TestCase):
                     with patch("cli.app._interactive", new_callable=AsyncMock, return_value=0) as chat:
                         self.assertEqual(main([]), 0)
 
-        chat.assert_awaited_once_with(store, None)
+        chat.assert_awaited_once_with(store, None, show_banner=False)
 
     def test_voice_terminal_client_prints_complete_transcripts_and_system_logs(self):
         from cli.voice import VoiceTerminalClient

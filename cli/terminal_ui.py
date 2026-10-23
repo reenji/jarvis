@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from contextlib import contextmanager
 from collections.abc import Callable
 from typing import Any
+
+from cli.banner import EYE_BANNER, banner_details
 
 
 class TerminalUI:
@@ -25,27 +28,34 @@ class TerminalUI:
             try:
                 from rich.console import Console
 
-                self.console = Console(highlight=False, soft_wrap=True)
+                self.console = Console(
+                    highlight=False,
+                    soft_wrap=True,
+                    no_color="NO_COLOR" in os.environ,
+                )
                 self.error_console = error_console or Console(
                     stderr=True,
                     highlight=False,
                     soft_wrap=True,
+                    no_color="NO_COLOR" in os.environ,
                 )
             except ImportError:
                 self.console = None
                 self.error_console = None
 
     def banner(self) -> None:
+        package_version, model = banner_details()
+        details = f"ARGUS CLI v{package_version} | model: {model}"
+
         if self.console is None:
-            self._output("  (o) ARGUS — seu assistente no terminal")
+            self._output(EYE_BANNER)
+            self._output(details)
             return
 
-        from rich.panel import Panel
         from rich.text import Text
 
-        title = Text("◉  ARGUS", style="bold bright_cyan", justify="center")
-        title.append("\nSeu assistente no terminal", style="dim")
-        self.console.print(Panel.fit(title, border_style="cyan", padding=(0, 2)))
+        self.console.print(Text(EYE_BANNER, style="bold bright_cyan"))
+        self.console.print(Text(details, style="bold cyan"))
 
     def info(self, text: str) -> None:
         if self.console is None:
