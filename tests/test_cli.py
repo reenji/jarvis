@@ -79,7 +79,7 @@ class SessionStoreTests(unittest.TestCase):
 
         chat.assert_awaited_once_with(store, None)
         output.assert_any_call(
-            "Voz indisponível; iniciando uma sessão de texto. Instale o extra [voice] para habilitar o áudio."
+            "A voz não está disponível; iniciando uma sessão de texto."
         )
 
     def test_no_subcommand_uses_saved_voice_preference_but_chat_forces_text(self):
@@ -135,7 +135,7 @@ class SessionStoreTests(unittest.TestCase):
         with patch("cli.voice.importlib.util.find_spec", return_value=None):
             result = run_voice(output=output.append, audio_available=lambda: False)
         self.assertEqual(result, VOICE_UNAVAILABLE)
-        self.assertTrue(any("optional voice extra" in line for line in output))
+        self.assertTrue(any("optional [voice] extra" in line for line in output))
 
     def test_voice_mode_falls_back_when_no_microphone_or_speaker_is_available(self):
         from cli.voice import VOICE_UNAVAILABLE, run_voice

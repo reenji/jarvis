@@ -99,7 +99,7 @@ def _run_voice() -> int:
     if result != VOICE_UNAVAILABLE:
         return result
 
-    print("Voz indisponível; iniciando uma sessão de texto. Instale o extra [voice] para habilitar o áudio.")
+    print("A voz não está disponível; iniciando uma sessão de texto.")
     try:
         store = SessionStore()
     except OSError as exc:

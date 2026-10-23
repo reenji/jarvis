@@ -147,5 +147,5 @@ def run_setup(
     output(f"Setup complete. Gemini key storage: {store}.")
     output(f"Configuration saved at {path}.")
     if voice_config["enabled"]:
-        output("Voice preference saved; voice support requires the optional voice phase and dependencies.")
+        output("Voice preference saved; install ARGUS with the optional [voice] extra to use audio.")
     return 0

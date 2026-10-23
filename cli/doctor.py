@@ -114,7 +114,7 @@ def _screen_check() -> DoctorCheck:
             capture.grab(monitors[0])
         return DoctorCheck("Screen capture", "ok", "Captured a frame in memory; no screenshot was saved.")
     except ImportError:
-        return DoctorCheck("Screen capture", "fail", "The screenshot package is not installed; install the desktop tools extra.")
+        return DoctorCheck("Screen capture", "fail", "The screenshot package is missing; repair the ARGUS base installation.")
     except Exception as exc:
         return DoctorCheck("Screen capture", "fail", f"Capture unavailable ({type(exc).__name__}); check display and screen-recording permissions.")
 
@@ -134,7 +134,7 @@ def _input_check() -> DoctorCheck:
 
         pyautogui.position()  # Read-only probe; never click or type during doctor.
     except ImportError:
-        return DoctorCheck("Mouse and keyboard", "fail", "The input automation package is not installed; install the desktop tools extra.")
+        return DoctorCheck("Mouse and keyboard", "fail", "The input automation package is missing; repair the ARGUS base installation.")
     except Exception as exc:
         return DoctorCheck("Mouse and keyboard", "fail", f"Input toolkit unavailable ({type(exc).__name__}); check desktop permissions.")
     return DoctorCheck("Mouse and keyboard", "ok", "Toolkit can read the pointer; doctor did not send a click or keystroke.")
