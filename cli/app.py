@@ -195,12 +195,21 @@ async def _interactive(
     if show_banner:
         ui.banner()
     ui.info(f"ARGUS text session {conversation.session_id[:12]}. Type /help for commands.")
+    prompt_interrupts = 0
     while True:
         try:
             text = prompter.prompt("You> ").strip()
-        except (EOFError, KeyboardInterrupt):
+        except EOFError:
             ui.info("\nARGUS session saved.")
             return 0
+        except KeyboardInterrupt:
+            prompt_interrupts += 1
+            if prompt_interrupts >= 2:
+                ui.info("\nARGUS session saved.")
+                return 0
+            ui.info("\nPress Ctrl+C again or Ctrl+D to save and exit.")
+            continue
+        prompt_interrupts = 0
         if not text:
             continue
         if text.startswith("/"):

@@ -148,6 +148,71 @@ class SessionStoreTests(unittest.TestCase):
         self.assertTrue(any("Pedido interrompido" in message for message in ui.messages))
         self.assertEqual(ui.answers, ["The second request completed."])
 
+    def test_one_prompt_interrupt_warns_and_leaves_the_session_open(self):
+        from cli.app import _interactive
+
+        class InterruptPrompt:
+            def __init__(self):
+                self.values = iter([KeyboardInterrupt(), "/exit"])
+                self.calls = 0
+
+            def prompt(self, _message):
+                self.calls += 1
+                value = next(self.values)
+                if isinstance(value, BaseException):
+                    raise value
+                return value
+
+        prompter = InterruptPrompt()
+        ui = Mock()
+        conversation = SimpleNamespace(session_id="session-id")
+        with patch("cli.prompt.InteractivePrompt", return_value=prompter):
+            with patch("cli.terminal_ui.TerminalUI", return_value=ui):
+                with patch("cli.app._new_conversation", return_value=conversation):
+                    self.assertEqual(
+                        asyncio.run(_interactive(object(), None, show_banner=False)),
+                        0,
+                    )
+        self.assertEqual(prompter.calls, 2)
+        ui.info.assert_any_call("\nPress Ctrl+C again or Ctrl+D to save and exit.")
+
+    def test_two_prompt_interrupts_exit_cleanly(self):
+        from cli.app import _interactive
+
+        class InterruptPrompt:
+            def prompt(self, _message):
+                raise KeyboardInterrupt
+
+        ui = Mock()
+        conversation = SimpleNamespace(session_id="session-id")
+        with patch("cli.prompt.InteractivePrompt", return_value=InterruptPrompt()):
+            with patch("cli.terminal_ui.TerminalUI", return_value=ui):
+                with patch("cli.app._new_conversation", return_value=conversation):
+                    self.assertEqual(
+                        asyncio.run(_interactive(object(), None, show_banner=False)),
+                        0,
+                    )
+        self.assertEqual(ui.info.call_count, 3)
+        ui.info.assert_called_with("\nARGUS session saved.")
+
+    def test_end_of_input_exits_cleanly(self):
+        from cli.app import _interactive
+
+        class EOFPrompt:
+            def prompt(self, _message):
+                raise EOFError
+
+        ui = Mock()
+        conversation = SimpleNamespace(session_id="session-id")
+        with patch("cli.prompt.InteractivePrompt", return_value=EOFPrompt()):
+            with patch("cli.terminal_ui.TerminalUI", return_value=ui):
+                with patch("cli.app._new_conversation", return_value=conversation):
+                    self.assertEqual(
+                        asyncio.run(_interactive(object(), None, show_banner=False)),
+                        0,
+                    )
+        ui.info.assert_called_with("\nARGUS session saved.")
+
     def test_quick_question_flags_cannot_be_combined_with_subcommands(self):
         with self.assertRaises(SystemExit):
             main(["-q", "hello", "chat"])
