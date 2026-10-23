@@ -79,3 +79,46 @@ core/tool_approval.py and main.py currently implement turn-bound approvals for s
 - The current CI only runs backend and frontend on Ubuntu. The platform support matrix must be measured per capability, not inferred from the README claim.
 - Relevant documentation includes README.md, docs/USAGE.md, docs/TERMS.md, docs/QA.md, docs/ARCHITECTURE.md, docs/TUTORIAL.md, docs/OPENJARVIS_COMPARISON.md, and docs/ui/.
 - Some existing docs are stale snapshots: docs/ARCHITECTURE.md describes a historical ui.py layout while the current code is a ui/ package; README.md still shows an old anonymandk/argus clone URL. Migration docs should update those references without changing hosted API/web deployment instructions.
+
+## Target CLI boundary and desktop-removal inventory
+
+### Target boundary adapted to this repository
+
+- core owns the live conversation loop, provider/session lifecycle, prompt, tool routing, policy, cancellation, configuration, and session interfaces. Extract these from main.py without changing model behavior or hosted WebSocket events.
+- tools retain the current action implementations under actions/ and the plugin system. Replace direct UI/player assumptions with narrow event, logging, speech, and file-context callbacks supplied by each adapter.
+- cli is a new terminal adapter over core: interactive text, one-shot query, resumable sessions, setup/config/doctor, slash commands, Rich/prompt_toolkit output, and optional voice.
+- api/ and web/ remain separate adapters over the same runtime. Do not couple their event protocol or deployment to terminal rendering.
+- Keep screen control and app launching in the existing tools/actions layer. The terminal process and any window owned by ARGUS must never be an automation target.
+
+### Phase 7 removal candidates
+
+Remove only after the CLI, tools, package, and hosted-adapter gates pass. Before removing a path, run repository-wide reference searches and move any shared behavior to a neutral module.
+
+| Candidate | Planned treatment |
+|---|---|
+| ui/** | Retire the PyQt windows, widgets, HUD, compact mode, overlays, notifications, and first-run presentation after equivalent CLI flows exist. |
+| ARGUS.spec, ARGUS-Debug.spec, scripts/create_locked_dmg.sh | Remove desktop PyInstaller and macOS disk-image packaging. |
+| scripts/start_argus.bat, scripts/start_argus.sh, scripts/start_argus.command | Replace local desktop launchers with the packaged CLI commands. |
+| scripts/setup_argus.py, scripts/setup_argus.bat, scripts/setup_argus.sh | Replace clone-local desktop setup with the CLI package setup flow. |
+| requirements-desktop.txt and requirements.txt | Refactor dependency groups; retain every dependency still used by actions, hosted API, or optional voice. Do not delete the whole manifests blindly. |
+| pyproject.toml | Remove UI package discovery and desktop-only dependencies; preserve API packages and define CLI base/optional extras. |
+| assets/fonts/**, DESIGN.md, docs/ui/**, UI screenshots and desktop-only docs | Remove only assets and documentation with no remaining CLI or hosted-web references. Keep web fonts/assets that the web client still imports. |
+| UI-only tests and scripts/qa_ui_probe.py | Remove or replace after CLI coverage exists; retain shared engine, action, API, and web tests. |
+| README.md, docs/ARCHITECTURE.md, docs/USAGE.md, docs/TUTORIAL.md | Rewrite desktop-specific instructions while retaining hosted API/web setup and deployment guidance. |
+
+Current .github/workflows/ci.yml and deploy.yml do not build the desktop app. Preserve their hosted API and frontend jobs; add CLI build/install checks before deleting PyQt. No desktop-specific GitHub Actions workflow was found in the current inventory.
+
+### Risks, open checks, and phase-0 gate
+
+1. main.py combines a 2,343-line live runtime, tool declarations/dispatch, audio, and desktop startup. Extract in small slices while preserving the existing ArgusClient compatibility seam.
+2. main.py imports sounddevice at module load. A text-only CLI or hosted import may fail in an environment without the audio dependency until imports are deferred.
+3. core/argus_client.py and tools.impl expose UI-specific state and commands. Replace these with adapter capabilities or CLI events rather than importing PyQt into core/tools.
+4. The tool declaration and execution paths are duplicated between main.py and tools/. Establish the active call paths and compatibility requirements before deleting or merging either.
+5. Current direct-control preference defaults to enabled, but turn-bound ToolApprovalManager gates remain. The user's no-confirmation policy must be implemented consistently in both direct and screen-control paths; only sensitive-file sharing should ask for confirmation.
+6. README claims three desktop platforms, but advanced accessibility/window automation is Windows-specific and CI is Ubuntu-only. Build a per-capability support matrix and mark unverified platform behavior honestly.
+7. CLI session history is new; define local storage location, permissions, deletion, and retention. Do not reuse long-term memory as conversation history or save screenshots there.
+8. The PDF places final CI/tests after desktop removal even though removal requires a green suite. Build a pre-removal CLI/API/web gate before phase 7, then rerun it after removal.
+9. The PDF says a single feat/cli-migration branch. This execution uses one PR per change and the owner's five-commit feature / three-commit bug-fix rule instead.
+10. app-final must reference the last pre-removal commit that contains the desktop app. The tag is not created during inventory.
+
+Phase 0 is complete: this inventory covers entry points, module families, audio, screen and mouse/keyboard control, search, configuration, logging/state, packaging, tests/CI, platforms, hosted adapters, removal candidates, and risks. No runtime code was modified.

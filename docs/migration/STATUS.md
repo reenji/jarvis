@@ -8,7 +8,7 @@ Migration plan source: attached PDF, reviewed before implementation.
 
 | Phase | Status | Notes |
 |---|---|---|
-| 0. Repository inventory | In progress | Documentation only; no runtime code changed. |
+| 0. Repository inventory | Complete | Documentation only; no runtime code changed. |
 | 1. Core boundaries | Pending | Preserve existing desktop and hosted adapters until the CLI works. |
 | 2. Text CLI and sessions | Pending | The existing argus entry point currently starts the desktop UI. |
 | 3. Setup, configuration, and doctor | Pending | Keep secrets out of the repository and terminal output. |
@@ -26,3 +26,7 @@ Migration plan source: attached PDF, reviewed before implementation.
 - Feature branches use feat/slug; bug-fix branches use bugfix/slug.
 - Dependent pull requests may be stacked on the preceding open branch, with the base recorded in each PR.
 - Do not create the app-final tag until the last commit containing the desktop app is known and the removal phase is ready.
+
+## Phase 0 result
+
+The repository inventory and migration decisions are committed on feat/cli-inventory. Runtime code is unchanged. The next change is a separate core-boundary feature PR.
