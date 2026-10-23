@@ -1225,7 +1225,7 @@ class ArgusLive:
         # optional path that must exist (e.g. a mounted encrypted volume)
         self.required_unlock_path: str | None = None
         self.required_unlock_secret: str | None = None
-        self.ui.on_text_command = self._on_text_command
+        self.client.on_text_command = self._on_text_command
         self._voice_changed  = threading.Event()
         self._turn_done_event: asyncio.Event | None = None
         self._tts_engine = None
@@ -1248,6 +1248,23 @@ class ArgusLive:
         if not self._loop or not self.session:
             return
         asyncio.run_coroutine_threadsafe(self.send_text(text), self._loop)
+
+    def _is_muted(self) -> bool:
+        """Return an adapter's mute state when it has one (text clients do not)."""
+        return bool(getattr(self.client, "muted", False))
+
+    def _current_file(self) -> str | None:
+        """Return an adapter-provided file context, if the client has one."""
+        value = getattr(self.client, "current_file", None)
+        return str(value) if value else None
+
+    def _call_client_capability(self, name: str, *args) -> bool:
+        """Invoke an optional adapter capability without making it core API."""
+        callback = getattr(self.client, name, None)
+        if not callable(callback):
+            return False
+        callback(*args)
+        return True
 
     def _tool_approvals(self) -> ToolApprovalManager:
         manager = getattr(self, "_approval_manager", None)
@@ -1299,9 +1316,9 @@ class ArgusLive:
         with self._speaking_lock:
             self._is_speaking = value
         if value:
-            self.ui.set_state("SPEAKING")
-        elif not self.ui.muted:
-            self.ui.set_state("LISTENING")
+            self.client.set_state("SPEAKING")
+        elif not self._is_muted():
+            self.client.set_state("LISTENING")
 
     def speak(self, text: str) -> bool:
         if not self._loop or not self.session:
@@ -1332,7 +1349,7 @@ class ArgusLive:
 
     def speak_error(self, tool_name: str, error: str):
         short = str(error)[:120]
-        self.ui.write_log(f"ERR: {tool_name} — {short}")
+        self.client.write_log(f"ERR: {tool_name} — {short}")
         self.speak(f"Houve um problema em {tool_name}. {short}")
 
     @staticmethod
@@ -1357,7 +1374,7 @@ class ArgusLive:
         self._pending_self_quit = True
         self._pending_self_quit_farewell_received = False
         try:
-            self.ui.write_log("SYS: Shutdown queued; waiting for ARGUS's farewell.")
+            self.client.write_log("SYS: Shutdown queued; waiting for ARGUS's farewell.")
         except Exception:
             pass
         # A voice model can occasionally omit audio/turn_complete. Do not
@@ -1394,7 +1411,7 @@ class ArgusLive:
             self._self_quit_timer.cancel()
             self._self_quit_timer = None
         self.request_shutdown()
-        self.ui.handle_ui_command("Quit ARGUS")
+        self._call_client_capability("handle_ui_command", "Quit ARGUS")
         return True
 
     def request_shutdown(self) -> None:
@@ -1465,9 +1482,9 @@ class ArgusLive:
 
     def update_voice(self, voice_name: str):
         self.voice_name = _normalize_voice_name(voice_name)
-        self.ui.write_log(f"SYS: Voice change requested: {self.voice_name}")
+        self.client.write_log(f"SYS: Voice change requested: {self.voice_name}")
         try:
-            self.ui.sync_voice_display(self.voice_name)
+            self._call_client_capability("sync_voice_display", self.voice_name)
         except Exception:
             pass
         if self.session and self._loop:
@@ -1477,7 +1494,7 @@ class ArgusLive:
                 print(f"[ARGUS] ⚠️ Could not close session after voice change: {e}")
 
     def update_voice_preferences(self):
-        self.ui.write_log("SYS: Voice preferences changed; refreshing the live session.")
+        self.client.write_log("SYS: Voice preferences changed; refreshing the live session.")
         if self.session and self._loop:
             try:
                 asyncio.run_coroutine_threadsafe(self.session.close(), self._loop)
@@ -1493,7 +1510,7 @@ class ArgusLive:
             direct_computer_control=enabled,
         )
         state = "enabled" if enabled else "disabled"
-        self.ui.write_log(f"SYS: Direct mouse and keyboard control {state}; refreshing the live session.")
+        self.client.write_log(f"SYS: Direct mouse and keyboard control {state}; refreshing the live session.")
         if self.session and self._loop:
             try:
                 asyncio.run_coroutine_threadsafe(self.session.close(), self._loop)
@@ -1503,7 +1520,7 @@ class ArgusLive:
     def _get_current_voice(self) -> str:
         if getattr(self, "voice_name", None):
             return _normalize_voice_name(self.voice_name)
-        voice_combo = getattr(self.ui, "_voice_combo", None)
+        voice_combo = getattr(self.client, "_voice_combo", None)
         if voice_combo is not None:
             idx = voice_combo.currentIndex()
             if idx >= 0:
@@ -1610,7 +1627,7 @@ class ArgusLive:
                 },
             )
 
-        if getattr(self.ui, "operational_ready", True) is False:
+        if getattr(self.client, "operational_ready", True) is False:
             return types.FunctionResponse(
                 id=fc.id,
                 name=name,
@@ -1628,20 +1645,20 @@ class ArgusLive:
             )
 
         print(f"[ARGUS] 🔧 {name}  {_safe_tool_log_args(args)}")
-        self.ui.set_state("THINKING")
+        self.client.set_state("THINKING")
 
         intercepted = self._intercept_ui_tool_call(name, args)
         if intercepted is not None:
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
+            if not self._is_muted():
+                self.client.set_state("LISTENING")
             return types.FunctionResponse(
                 id=fc.id, name=name, response={"result": intercepted}
             )
 
         approval_block = self._tool_approval_block(name, args)
         if approval_block is not None:
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
+            if not self._is_muted():
+                self.client.set_state("LISTENING")
             return types.FunctionResponse(
                 id=fc.id, name=name, response={"result": approval_block}
             )
@@ -1653,8 +1670,8 @@ class ArgusLive:
             if key and value:
                 update_memory({category: {key: {"value": value}}})
                 print(f"[Memory] 💾 save_memory: {category}/{key} = {value}")
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
+            if not self._is_muted():
+                self.client.set_state("LISTENING")
             return types.FunctionResponse(
                 id=fc.id, name=name,
                 response={"result": "ok", "silent": True}
@@ -1664,15 +1681,15 @@ class ArgusLive:
 
         try:
             if name == "open_app":
-                r = await asyncio.to_thread(lambda: open_app(parameters=args, response=None, player=self.ui))
+                r = await asyncio.to_thread(lambda: open_app(parameters=args, response=None, player=self.client))
                 result = r or f"Opened {args.get('app_name')}."
 
             elif name == "weather_report":
-                r = await asyncio.to_thread(lambda: weather_action(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(lambda: weather_action(parameters=args, player=self.client))
                 result = r or "Weather delivered."
 
             elif name == "browser_control":
-                r = await asyncio.to_thread(lambda: browser_control(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(lambda: browser_control(parameters=args, player=self.client))
                 result = r or "Done."
 
             elif name == "file_controller":
@@ -1681,53 +1698,53 @@ class ArgusLive:
                     and not args.get("path")
                     and not args.get("name")
                 ):
-                    current_file = getattr(self.ui, "current_file", None)
+                    current_file = self._current_file()
                     if current_file:
                         args["path"] = current_file
-                r = await asyncio.to_thread(lambda: file_controller(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(lambda: file_controller(parameters=args, player=self.client))
                 result = r or "Done."
 
             elif name == "check_messages":
                 r = await asyncio.to_thread(
-                    lambda: check_messages(parameters=args, response=None, player=self.ui, session_memory=None),
+                    lambda: check_messages(parameters=args, response=None, player=self.client, session_memory=None),
                 )
                 result = r or "No readable messages were found."
 
             elif name == "prepare_message_reply":
                 r = await asyncio.to_thread(
-                    lambda: prepare_message_reply(parameters=args, response=None, player=self.ui, session_memory=None),
+                    lambda: prepare_message_reply(parameters=args, response=None, player=self.client, session_memory=None),
                 )
                 result = r or "The message draft could not be prepared."
 
             elif name == "send_message":
-                r = await asyncio.to_thread(lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
+                r = await asyncio.to_thread(lambda: send_message(parameters=args, response=None, player=self.client, session_memory=None))
                 result = r or f"Message sent to {args.get('receiver')}."
 
             elif name == "email_control":
                 if args.get("action", "").lower() == "connect" and not args.get("credentials_path"):
-                    current_file = getattr(self.ui, "current_file", None)
+                    current_file = self._current_file()
                     if current_file and Path(str(current_file)).suffix.lower() == ".json":
                         args["credentials_path"] = current_file
-                r = await asyncio.to_thread(lambda: email_control(parameters=args, response=None, player=self.ui, session_memory=None))
+                r = await asyncio.to_thread(lambda: email_control(parameters=args, response=None, player=self.client, session_memory=None))
                 result = r or "Email action completed."
 
             elif name == "reminder":
-                r = await asyncio.to_thread(lambda: reminder(parameters=args, response=None, player=self.ui))
+                r = await asyncio.to_thread(lambda: reminder(parameters=args, response=None, player=self.client))
                 result = r or "Reminder set."
 
             elif name == "youtube_video":
-                r = await asyncio.to_thread(lambda: youtube_video(parameters=args, response=None, player=self.ui))
+                r = await asyncio.to_thread(lambda: youtube_video(parameters=args, response=None, player=self.client))
                 result = r or "Done."
 
             elif name == "media_control":
-                r = await asyncio.to_thread(lambda: media_control(parameters=args, response=None, player=self.ui))
+                r = await asyncio.to_thread(lambda: media_control(parameters=args, response=None, player=self.client))
                 result = r or "Done."
 
             elif name == "screen_process":
                 threading.Thread(
                     target=screen_process,
                     kwargs={"parameters": args, "response": None,
-                            "player": self.ui, "session_memory": None,
+                            "player": self.client, "session_memory": None,
                             "speak": self._speak_vision_result},
                     daemon=True
                 ).start()
@@ -1770,19 +1787,19 @@ class ArgusLive:
                 result = await asyncio.to_thread(local_knowledge, parameters=args)
 
             elif name == "computer_settings":
-                r = await asyncio.to_thread(lambda: computer_settings(parameters=args, response=None, player=self.ui))
+                r = await asyncio.to_thread(lambda: computer_settings(parameters=args, response=None, player=self.client))
                 result = r or "Done."
 
             elif name == "desktop_control":
-                r = await asyncio.to_thread(lambda: desktop_control(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(lambda: desktop_control(parameters=args, player=self.client))
                 result = r or "Done."
 
             elif name == "code_helper":
-                r = await asyncio.to_thread(lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
+                r = await asyncio.to_thread(lambda: code_helper(parameters=args, player=self.client, speak=self.speak))
                 result = r or "Done."
 
             elif name == "dev_agent":
-                r = await asyncio.to_thread(lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
+                r = await asyncio.to_thread(lambda: dev_agent(parameters=args, player=self.client, speak=self.speak))
                 result = r or "Done."
 
             elif name == "agent_task":
@@ -1798,34 +1815,37 @@ class ArgusLive:
                 result   = f"Task started (ID: {task_id})."
 
             elif name == "web_search":
-                r = await asyncio.to_thread(lambda: web_search_action(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(lambda: web_search_action(parameters=args, player=self.client))
                 result = r or "Done."
             elif name == "file_processor":
-                if not args.get("file_path") and self.ui.current_file:
-                    args["file_path"] = self.ui.current_file
+                current_file = self._current_file()
+                if not args.get("file_path") and current_file:
+                    args["file_path"] = current_file
                 r = await asyncio.to_thread(
-                    lambda: file_processor(parameters=args, player=self.ui, speak=self.speak)
+                    lambda: file_processor(parameters=args, player=self.client, speak=self.speak)
                 )
                 result = r or "Done."
 
             elif name == "computer_control":
-                r = await asyncio.to_thread(lambda: computer_control(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(lambda: computer_control(parameters=args, player=self.client))
                 result = r or "Done."
 
             elif name == "game_updater":
-                r = await asyncio.to_thread(lambda: game_updater(parameters=args, player=self.ui, speak=self.speak))
+                r = await asyncio.to_thread(lambda: game_updater(parameters=args, player=self.client, speak=self.speak))
                 result = r or "Done."
 
             elif name == "flight_finder":
-                r = await asyncio.to_thread(lambda: flight_finder(parameters=args, player=self.ui))
+                r = await asyncio.to_thread(lambda: flight_finder(parameters=args, player=self.client))
                 result = r or "Done."
 
             elif name == "graphics_quality":
                 quality = str(args.get("quality") or "").strip().lower()
                 if quality not in {"low", "medium", "high"}:
                     raise ValueError("Graphics quality must be low, medium, or high.")
-                self.ui.set_graphics_quality(quality)
-                result = f"ARGUS graphics quality changed to {quality}."
+                if self._call_client_capability("set_graphics_quality", quality):
+                    result = f"ARGUS graphics quality changed to {quality}."
+                else:
+                    result = "Graphics quality controls are unavailable for this client."
 
             elif name == "argus_ui_control":
                 action = str(args.get("action") or "").strip().lower()
@@ -1834,24 +1854,30 @@ class ArgusLive:
                     allowed = {"arc_reactor", "stealth_red", "vibranium_purple", "nanotech_gold", "platinum"}
                     if theme not in allowed:
                         raise ValueError(f"Unknown ARGUS theme: {theme or 'missing'}")
-                    self.ui.set_theme(theme)
-                    result = f"ARGUS theme changed to {theme.replace('_', ' ')}."
+                    if self._call_client_capability("set_theme", theme):
+                        result = f"ARGUS theme changed to {theme.replace('_', ' ')}."
+                    else:
+                        result = "Theme controls are unavailable for this client."
                 elif action == "change_graphics_quality":
                     quality = str(args.get("graphics_quality") or "").strip().lower()
                     if quality not in {"low", "medium", "high"}:
                         raise ValueError(f"Unknown graphics quality: {quality or 'missing'}")
-                    self.ui.set_graphics_quality(quality)
-                    result = f"ARGUS graphics quality changed to {quality}."
+                    if self._call_client_capability("set_graphics_quality", quality):
+                        result = f"ARGUS graphics quality changed to {quality}."
+                    else:
+                        result = "Graphics quality controls are unavailable for this client."
                 else:
-                    self.ui.handle_ui_command(action)
-                    result = f"ARGUS interface action completed: {action.replace('_', ' ')}."
+                    if self._call_client_capability("handle_ui_command", action):
+                        result = f"ARGUS interface action completed: {action.replace('_', ' ')}."
+                    else:
+                        result = "Interface controls are unavailable for this client."
 
             elif name == "deep_research":
-                r = request_deep_research(parameters=args, player=self.ui, speak=self.speak)
+                r = request_deep_research(parameters=args, player=self.client, speak=self.speak)
                 result = r or "Deep research preference requested."
 
             elif name == "create_presentation":
-                current_file = getattr(self.ui, "current_file", None)
+                current_file = self._current_file()
                 supported_sources = {
                     ".txt", ".md", ".rst", ".csv", ".json", ".jsonl", ".docx", ".pptx",
                     ".pdf", ".xlsx", ".xls", ".png", ".jpg", ".jpeg", ".webp",
@@ -1864,7 +1890,7 @@ class ArgusLive:
                     and Path(str(current_file)).suffix.lower() in supported_sources
                 ):
                     args["source_files"] = [current_file]
-                r = request_presentation(parameters=args, player=self.ui, speak=self.speak)
+                r = request_presentation(parameters=args, player=self.client, speak=self.speak)
                 result = r or "Presentation preference requested."
 
             elif name == "task_status":
@@ -1889,8 +1915,8 @@ class ArgusLive:
             traceback.print_exc()
             self.speak_error(name, e)
 
-        if not self.ui.muted:
-            self.ui.set_state("LISTENING")
+        if not self._is_muted():
+            self.client.set_state("LISTENING")
 
         print(f"[ARGUS] 📤 {name} → {str(result)[:80]}")
         return types.FunctionResponse(
@@ -1928,7 +1954,7 @@ class ArgusLive:
         def callback(indata, frames, time_info, status):
             with self._speaking_lock:
                 argus_speaking = self._is_speaking
-            if not argus_speaking and not self.ui.muted:
+            if not argus_speaking and not self._is_muted():
                 data = indata.tobytes()
                 loop.call_soon_threadsafe(
                     self.out_queue.put_nowait,
@@ -1977,11 +2003,11 @@ class ArgusLive:
                             if txt:
                                 out_buf.append(txt)
                                 self._interrupted_text = " ".join(out_buf)
-                                if not self.ui.muted:
+                                if not self._is_muted():
                                     if _new_turn:
-                                        self.ui.clear_subtitle()
+                                        self.client.clear_subtitle()
                                         _new_turn = False
-                                    self.ui.show_subtitle(txt)
+                                    self.client.show_subtitle(txt)
 
                         if sc.input_transcription and sc.input_transcription.text:
                             txt = _clean_transcript(sc.input_transcription.text)
@@ -2015,12 +2041,12 @@ class ArgusLive:
                                     and self._is_explicit_self_quit_transcript(full_in)
                                 ):
                                     self._queue_self_quit_after_farewell()
-                                self.ui.write_log(f"You: {full_in}")
+                                self.client.write_log(f"You: {full_in}")
                             in_buf = []
 
                             full_out = " ".join(out_buf).strip()
                             if full_out:
-                                self.ui.write_log(f"Argus: {full_out}")
+                                self.client.write_log(f"Argus: {full_out}")
                             if (
                                 getattr(self, "_pending_self_quit", False)
                                 and (full_out or turn_had_audio)
@@ -2112,7 +2138,7 @@ class ArgusLive:
         )
         live_model = await asyncio.to_thread(pick_live_model, client, API_CONFIG_PATH)
         live_model_id = live_model.removeprefix("models/")
-        self.ui.write_log(f"SYS: Gemini Live model selected: {live_model_id}")
+        self.client.write_log(f"SYS: Gemini Live model selected: {live_model_id}")
 
         start_time = time.time()
         while True:
@@ -2151,7 +2177,7 @@ class ArgusLive:
                     continue
             try:
                 print("[ARGUS] 🔌 Connecting...")
-                self.ui.set_state("THINKING")
+                self.client.set_state("THINKING")
                 config = self._build_config()
 
                 async with (
@@ -2165,8 +2191,8 @@ class ArgusLive:
                     self._turn_done_event = asyncio.Event()
 
                     print("[ARGUS] ✅ Connected.")
-                    self.ui.set_state("LISTENING")
-                    self.ui.write_log("SYS: ARGUS online.")
+                    self.client.set_state("LISTENING")
+                    self.client.write_log("SYS: ARGUS online.")
                     if not self.cloud_safe:
                         try:
                             argus_status.write_status({
@@ -2194,11 +2220,11 @@ class ArgusLive:
                 if _is_unsupported_voice_error(actual) and self.voice_name != DEFAULT_VOICE_NAME:
                     old_voice = self.voice_name
                     self.voice_name = DEFAULT_VOICE_NAME
-                    self.ui.write_log(
+                    self.client.write_log(
                         f"SYS: Voice '{old_voice}' not available. Falling back to {DEFAULT_VOICE_NAME}."
                     )
                     print(f"[ARGUS] ⚠️ Voice '{old_voice}' unsupported; falling back to {DEFAULT_VOICE_NAME}.")
-                    self.ui.sync_voice_display(DEFAULT_VOICE_NAME)
+                    self._call_client_capability("sync_voice_display", DEFAULT_VOICE_NAME)
                     if not self.cloud_safe:
                         try:
                             argus_status.write_status({"state": "voice_fallback", "voice": DEFAULT_VOICE_NAME})
