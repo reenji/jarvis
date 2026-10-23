@@ -16,7 +16,11 @@ from actions.screen_control.accessibility import describe_controls
 from actions.screen_control.actions import ActionResult, execute
 from actions.screen_control.capture import Capture, capture_active_window
 from actions.screen_control.config import ScreenConfig
-from actions.screen_control.safety import AbortController, sensitive_file_reason
+from actions.screen_control.safety import (
+    AbortController,
+    is_blocked_terminal_target,
+    sensitive_file_reason,
+)
 from actions.screen_control.schemas import ActionType, ScreenAction
 from actions.screen_control.vision import decide_next_action, describe_screen
 from actions.screen_control.window import bring_to_front
@@ -192,6 +196,8 @@ class ScreenAgent:
         )
 
     def _focus_or_launch(self, window_title: str, *, deadline: float) -> bool:
+        if is_blocked_terminal_target(window_title):
+            return False
         if bring_to_front(window_title):
             return True
 
@@ -214,6 +220,13 @@ class ScreenAgent:
         run_id = uuid.uuid4().hex[:12]
         if not goal:
             return ScreenRunResult("fail", "Diga o que devo fazer na tela.", 0, run_id)
+        if window_title and is_blocked_terminal_target(window_title):
+            return ScreenRunResult(
+                "fail",
+                "O terminal é protegido e não pode ser alvo do controle de tela. Peça a abertura do aplicativo pelo nome.",
+                0,
+                run_id,
+            )
         started = time.monotonic()
         history: list[dict] = []
         previous_hash = ""

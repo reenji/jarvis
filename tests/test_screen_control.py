@@ -14,6 +14,7 @@ from actions.screen_control.schemas import ActionType, ScreenAction
 from actions.screen_control.safety import sensitive_file_reason
 from actions.screen_control.window import WindowInfo
 from actions.screen_control.agent import _share_intent
+from actions.screen_control.safety import is_blocked_process, is_blocked_terminal_target
 
 
 def _capture(*, left=0, top=0, source_width=1000, source_height=600, scale=1.0):
@@ -70,6 +71,32 @@ def test_sensitive_file_detection_covers_env_docker_and_secret_contents():
 def test_file_confirmation_policy_only_triggers_for_file_sharing():
     assert _share_intent("Compartilhe o arquivo docker-compose.yml com a equipe")
     assert not _share_intent("Compartilhe minha tela do Discord com a equipe")
+
+
+@pytest.mark.parametrize("process", ["WindowsTerminal.exe", "powershell.exe", "gnome-terminal-server", "iTerm2"])
+def test_terminal_processes_are_blocked_as_screen_targets(process):
+    assert is_blocked_process(process)
+
+
+@pytest.mark.parametrize("target", ["Windows Terminal", "PowerShell", "cmd.exe", "iTerm2", "Terminal"])
+def test_terminal_names_are_blocked_as_requested_window_targets(target):
+    assert is_blocked_terminal_target(target)
+
+
+def test_active_terminal_window_fails_closed_before_capture():
+    from types import SimpleNamespace
+    from actions.screen_control.window import get_active_window
+
+    win32gui = SimpleNamespace(
+        GetForegroundWindow=lambda: 100,
+        GetWindowText=lambda _handle: "PowerShell - C:\\workspace",
+        GetWindowRect=lambda _handle: (0, 0, 1280, 720),
+    )
+    win32process = SimpleNamespace(GetWindowThreadProcessId=lambda _handle: (7, 123))
+    psutil = SimpleNamespace(Process=lambda _pid: SimpleNamespace(name=lambda: "WindowsTerminal.exe"))
+    with patch.dict("sys.modules", {"win32gui": win32gui, "win32process": win32process, "psutil": psutil}):
+        with pytest.raises(RuntimeError, match="terminal é protegida"):
+            get_active_window()
 
 
 class _NoopAbort:
@@ -135,6 +162,22 @@ def test_screen_agent_does_not_act_on_wrong_window_if_requested_app_cannot_open(
 
     assert result.status == "fail"
     assert "abrir e focar" in result.summary
+    capture.assert_not_called()
+
+
+def test_screen_agent_never_opens_or_focuses_a_requested_terminal():
+    agent = ScreenAgent(abort_controller=_NoopAbort())
+    with (
+        patch("actions.screen_control.agent.bring_to_front") as focus,
+        patch("actions.open_app.open_app") as launch,
+        patch("actions.screen_control.agent.capture_active_window") as capture,
+    ):
+        result = agent.run("Digite um comando", window_title="PowerShell")
+
+    assert result.status == "fail"
+    assert "terminal é protegido" in result.summary
+    focus.assert_not_called()
+    launch.assert_not_called()
     capture.assert_not_called()
 
 
