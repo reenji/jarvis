@@ -4,6 +4,10 @@ Thank you for considering contributing!
 - Keep changes focused and small; one feature or fix per PR.
 - Update `README.md` or docs for any user-visible changes.
 
+## Repository hygiene
+
+Remove local backup files such as `*.bak` before committing. Git ignores these files automatically.
+
 ## Python checks
 
 Use Python 3.11 or newer. Install the complete development profile from the
