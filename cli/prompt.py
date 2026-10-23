@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import os
 import sys
 from pathlib import Path
@@ -11,6 +12,10 @@ from cli.history import default_database_path
 
 SLASH_COMMANDS = (
     "/help",
+    "/status",
+    "/tools",
+    "/theme",
+    "/profile",
     "/new",
     "/sessions",
     "/voice",
@@ -53,11 +58,13 @@ class InteractivePrompt:
         history_path: str | Path | None = None,
         session_factory=None,
         interactive: bool | None = None,
+        prompt_color: str = "#4dd0e1",
     ) -> None:
         self.history_path = Path(history_path) if history_path else default_prompt_history_path()
         self._session_factory = session_factory
         self._interactive = interactive
         self._session: Any | None = None
+        self._prompt_color = prompt_color
 
     @staticmethod
     def _create_session(history_path: Path):
@@ -92,6 +99,26 @@ class InteractivePrompt:
             except ImportError:
                 return input(message)
         try:
-            return str(self._session.prompt([("class:prompt", message)]))
+            from prompt_toolkit.styles import Style
+
+            style = Style.from_dict({"prompt": f"{self._prompt_color} bold"})
+            prompt_method = self._session.prompt
+            try:
+                parameters = inspect.signature(prompt_method).parameters.values()
+                accepts_style = any(
+                    parameter.name == "style"
+                    or parameter.kind is inspect.Parameter.VAR_KEYWORD
+                    for parameter in parameters
+                )
+            except (TypeError, ValueError):
+                accepts_style = True
+            prompt_args = [("class:prompt", message)]
+            if accepts_style:
+                return str(prompt_method(prompt_args, style=style))
+            return str(prompt_method(prompt_args))
         finally:
             _secure_history_path(self.history_path)
+
+    def set_theme_color(self, color: str) -> None:
+        """Apply the selected terminal accent to the next interactive prompt."""
+        self._prompt_color = color

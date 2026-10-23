@@ -79,7 +79,13 @@ def build_parser() -> argparse.ArgumentParser:
     config_commands.add_parser("path", help="print the user configuration path")
     config_commands.add_parser("show", help="show effective settings with secrets hidden")
     config_set = config_commands.add_parser("set", help="set a supported preference")
-    config_set.add_argument("key", help="banner, voice.enabled, voice.name, or llm.model")
+    config_set.add_argument(
+        "key",
+        help=(
+            "banner, voice.enabled, voice.name, llm.model, terminal.theme, "
+            "terminal.assistant_name, or terminal.user_name"
+        ),
+    )
     config_set.add_argument("value", help="new preference value")
     return parser
 
@@ -189,6 +195,19 @@ def _show_turn_status(ui, conversation) -> None:
         )
 
 
+def _tool_declarations() -> list[dict]:
+    try:
+        from tools.registry import registry
+
+        return [
+            declaration
+            for declaration in registry.declarations()
+            if declaration.get("name") not in {"graphics_quality", "argus_ui_control"}
+        ]
+    except Exception:
+        return []
+
+
 async def _interactive(
     store: SessionStore,
     session_id: str | None,
@@ -200,17 +219,10 @@ async def _interactive(
     from cli.terminal_ui import TerminalUI
     from cli.terminal_profile import load_terminal_profile
 
-    ui = TerminalUI(profile=load_terminal_profile())
+    profile = load_terminal_profile()
+    ui = TerminalUI(profile=profile)
     terminal = TerminalClient(output=ui.system, error=ui.error)
-    prompter = InteractivePrompt()
-
-    try:
-        resolved_session_id = _resolve_session(store, session_id)
-        if session_id and resolved_session_id is None:
-            raise ValueError(f"Session not found or ID prefix is ambiguous: {session_id}")
-    except (ValueError, KeyError) as exc:
-        ui.error(str(exc))
-        return 2
+    prompter = InteractivePrompt(prompt_color=profile.colors.primary)
 
     try:
         from config.settings import get_api_key
@@ -224,30 +236,22 @@ async def _interactive(
         from cli.banner import banner_details
 
         package_version, model = banner_details()
-        try:
-            from tools.registry import registry
-
-            tool_declarations = registry.declarations()
-        except Exception:
-            tool_declarations = []
-        ui.dashboard(
-            package_version=package_version,
-            model=model,
-            session_id=resolved_session_id or "new session",
-            workspace=os.getcwd(),
-            tool_declarations=tool_declarations,
-            api_ready=api_ready,
-        )
-
-    if not api_ready:
-        ui.error("No Gemini API key is configured. Run `argus setup` before starting a conversation.")
-        return 2
-
-    if resolved_session_id is None:
-        resolved_session_id = store.create("New conversation")
+        tool_declarations = _tool_declarations()
+        render_dashboard = getattr(ui, "dashboard", None)
+        if callable(render_dashboard):
+            render_dashboard(
+                package_version=package_version,
+                model=model,
+                session_id=session_id or "new session",
+                workspace=os.getcwd(),
+                tool_declarations=tool_declarations,
+                api_ready=api_ready,
+            )
+        else:
+            ui.banner()
 
     try:
-        conversation = _new_conversation(store, resolved_session_id, terminal=terminal)
+        conversation = _new_conversation(store, session_id, terminal=terminal)
     except Exception as exc:
         ui.error(f"Could not start ARGUS: {str(exc)[:300]}")
         if show_banner:
@@ -281,14 +285,80 @@ async def _interactive(
                 return 0
             if command == "/help":
                 ui.info(
-                    "/new — start a new session\n"
-                    "/sessions — list saved sessions\n"
-                    "/voice — switch to voice mode, then return here\n"
-                    "/doctor — check configuration and capabilities\n"
-                    "/resume ID — switch to a saved session\n"
-                    "/clear — clear this session's conversation\n"
-                    "/delete ID — delete a saved session\n"
-                    "/exit — save and leave"
+                    "/status — ver sessão, modelo e recursos ativos\n"
+                    "/tools — listar todas as ações disponíveis\n"
+                    "/theme [cyan|amber|matrix|mono] — escolher o tema\n"
+                    "/profile [assistant|user NOME] — personalizar os nomes\n"
+                    "/new — iniciar uma nova sessão\n"
+                    "/sessions — listar sessões salvas\n"
+                    "/voice — alternar para voz e depois voltar ao texto\n"
+                    "/doctor — verificar configuração e recursos locais\n"
+                    "/resume ID — retomar uma sessão\n"
+                    "/clear — limpar a conversa desta sessão\n"
+                    "/delete ID — apagar uma sessão salva\n"
+                    "/exit — salvar e sair"
+                )
+                continue
+            if command == "/status":
+                ui.show_status(
+                    model=getattr(conversation, "model", "Gemini"),
+                    session_id=conversation.session_id,
+                    tool_count=len(_tool_declarations()),
+                    api_ready=True,
+                )
+                continue
+            if command == "/tools":
+                ui.show_tools(_tool_declarations())
+                continue
+            if command == "/theme":
+                if not argument:
+                    from cli.terminal_profile import THEMES
+
+                    ui.info(
+                        f"Tema atual: {ui.profile.theme}. Opções: {', '.join(THEMES)}. "
+                        "Use /theme NOME para salvar sua preferência."
+                    )
+                    continue
+                from cli.terminal_profile import save_terminal_preference
+
+                try:
+                    ui.profile = save_terminal_preference("theme", argument)
+                except ValueError as exc:
+                    ui.error(str(exc))
+                    continue
+                prompter.set_theme_color(ui.profile.colors.primary)
+                ui.info(f"Tema {ui.profile.theme} salvo para este usuário.")
+                continue
+            if command == "/profile":
+                if not argument:
+                    ui.info(
+                        f"Argus: {ui.profile.assistant_name} · usuário: {ui.profile.user_name}\n"
+                        "Use /profile assistant NOME ou /profile user NOME para personalizar."
+                    )
+                    continue
+                import shlex
+
+                try:
+                    profile_args = shlex.split(argument)
+                except ValueError as exc:
+                    ui.error(f"Perfil inválido: {exc}")
+                    continue
+                if len(profile_args) < 2 or profile_args[0].casefold() not in {
+                    "assistant", "assistant_name", "user", "user_name"
+                }:
+                    ui.info("Uso: /profile assistant NOME | /profile user NOME")
+                    continue
+                profile_key = "assistant_name" if profile_args[0].casefold().startswith("assistant") else "user_name"
+                from cli.terminal_profile import save_terminal_preference
+
+                try:
+                    ui.profile = save_terminal_preference(profile_key, " ".join(profile_args[1:]))
+                except ValueError as exc:
+                    ui.error(str(exc))
+                    continue
+                ui.info(
+                    f"Perfil salvo: Argus {ui.profile.assistant_name} · "
+                    f"usuário {ui.profile.user_name}."
                 )
                 continue
             if command == "/voice":

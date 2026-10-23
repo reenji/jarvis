@@ -14,6 +14,7 @@ from config.user_config import (
     save_user_config,
     user_config_path,
 )
+from cli.terminal_profile import load_terminal_profile, save_terminal_preference
 
 
 def show_config(output: Callable[[str], None] = print) -> int:
@@ -33,6 +34,10 @@ def show_config(output: Callable[[str], None] = print) -> int:
     from cli.banner import banner_preference
 
     output(f"Banner: {'enabled' if banner_preference() else 'disabled'}")
+    profile = load_terminal_profile()
+    output(f"Terminal theme: {profile.theme}")
+    output(f"Terminal assistant name: {profile.assistant_name}")
+    output(f"Terminal user name: {profile.user_name}")
     return 0
 
 
@@ -49,14 +54,33 @@ def _parse_value(key: str, value: str) -> Any:
         if not cleaned or len(cleaned) > 120:
             raise ValueError(f"{key} must contain 1 to 120 characters.")
         return cleaned
+    if key == "terminal.theme":
+        from cli.terminal_profile import THEMES
+
+        normalized = value.strip().casefold()
+        if normalized not in THEMES:
+            raise ValueError(f"terminal.theme must be one of: {', '.join(THEMES)}.")
+        return normalized
+    if key in {"terminal.assistant_name", "terminal.user_name"}:
+        cleaned = value.strip()
+        if not cleaned or len(cleaned) > 32:
+            raise ValueError(f"{key} must contain 1 to 32 characters.")
+        return cleaned
     if key == "llm.gemini_api_key":
         raise ValueError("Use `argus setup` to enter the Gemini key without exposing it in shell history.")
-    raise ValueError("Supported keys: banner, voice.enabled, voice.name, llm.model.")
+    raise ValueError(
+        "Supported keys: banner, voice.enabled, voice.name, llm.model, "
+        "terminal.theme, terminal.assistant_name, terminal.user_name."
+    )
 
 
 def set_config_value(key: str, value: str, output: Callable[[str], None] = print) -> int:
     try:
         parsed = _parse_value(key, value)
+        if key.startswith("terminal."):
+            profile = save_terminal_preference(key.removeprefix("terminal."), value)
+            output(f"Saved {key} in {user_config_path()} (active theme: {profile.theme}).")
+            return 0
         config = load_user_config()
         if key == "banner":
             config[key] = parsed

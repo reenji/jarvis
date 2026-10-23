@@ -89,8 +89,9 @@ class TerminalUI:
             self._output(f"{profile.assistant_name} CLI v{package_version}")
             self._output(f"User: {profile.user_name} | Theme: {profile.theme} | Model: {model}")
             self._output(f"Session: {session_id[:12]} | Workspace: {workspace_name}")
-            if api_ready is False:
-                self._output("Gemini key: not configured — run `argus setup`.")
+            if api_ready is not None:
+                api_status = "key configured" if api_ready else "key missing — run `argus setup`"
+                self._output(f"Gemini: {api_status}")
             self._output(f"Available actions ({tool_count}):")
             for category, names in groups.items():
                 self._output(f"  {category}: {', '.join(names)}")
@@ -106,7 +107,11 @@ class TerminalUI:
 
         colors = profile.colors
         logo = Text(
-            "  ▄▀█ █▀█ █▀▀ █ █ █▀\n  █▀█ █▀▄ ██▄ ▀▄▀ ▄█",
+            " ███   ████    ████  █   █   ████\n"
+            "█   █  █   █  █      █   █  █    \n"
+            "█████  ████   █ ███  █   █   ███ \n"
+            "█   █  █  █   █   █  █   █      █\n"
+            "█   █  █   █   ████   ███   ████ ",
             style=f"bold {colors.primary}",
         )
         title = Table.grid(expand=True)
@@ -129,7 +134,7 @@ class TerminalUI:
         if api_ready is not None:
             status.add_row(
                 "Gemini",
-                Text("ready" if api_ready else "key missing · run argus setup",
+                Text("key configured" if api_ready else "key missing · run argus setup",
                      style=colors.success if api_ready else "bold yellow"),
             )
         status_panel = Panel(
@@ -173,6 +178,42 @@ class TerminalUI:
         shortcuts.append(" save & exit")
         self.console.print(Panel(shortcuts, border_style=colors.muted, box=box.SQUARE, padding=(0, 1)))
 
+    def show_status(self, *, model: str, session_id: str, tool_count: int, api_ready: bool) -> None:
+        """Show a compact live status block, matching the startup dashboard."""
+        self.info(
+            f"{self.profile.assistant_name} · {self.profile.user_name} · theme {self.profile.theme}\n"
+            f"model {model} · session {session_id[:12]} · {tool_count} actions · "
+            f"Gemini {'key configured' if api_ready else 'needs setup'}"
+        )
+
+    def show_tools(self, tool_declarations: list[dict[str, Any]]) -> None:
+        """List the full action inventory without loading descriptions or secrets."""
+        names = sorted(
+            str(declaration.get("name", "")).strip()
+            for declaration in tool_declarations
+            if declaration.get("name")
+        )
+        if self.console is None:
+            self._output(f"Available actions ({len(names)}):")
+            for name in names:
+                self._output(f"  · {name}")
+            return
+
+        from rich import box
+        from rich.panel import Panel
+        from rich.text import Text
+
+        content = Text("  · " + "\n  · ".join(names), style="white") if names else Text("No actions are enabled.")
+        self.console.print(
+            Panel(
+                content,
+                title=f"AVAILABLE ACTIONS · {len(names)}",
+                border_style=self.profile.colors.secondary,
+                box=box.DOUBLE,
+                padding=(0, 1),
+            )
+        )
+
     def info(self, text: str) -> None:
         if self.console is None:
             self._output(text)
@@ -210,7 +251,7 @@ class TerminalUI:
 
     def assistant(self, text: str) -> None:
         if self.console is None:
-            self._output(f"ARGUS> {text}")
+            self._output(f"{self.profile.assistant_name}> {text}")
             return
 
         from rich.markdown import Markdown
