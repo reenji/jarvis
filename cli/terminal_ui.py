@@ -79,7 +79,8 @@ class TerminalUI:
             return
         from rich.text import Text
 
-        line = Text("  ◌ ", style=ACCENT)
+        finished = value.startswith("Finished ")
+        line = Text("  ✓ " if finished else "  ◌ ", style=SUCCESS if finished else ACCENT)
         if already_prefixed:
             value = value[len("[ARGUS] "):]
         line.append(value, style="dim")
@@ -129,6 +130,38 @@ class TerminalUI:
                 padding=(0, 1),
             )
         )
+
+    def turn_status(
+        self,
+        model: str,
+        usage: dict[str, int],
+        duration_seconds: float,
+    ) -> None:
+        """Show compact model, token, and duration details after a response."""
+        details = [str(model or "ARGUS")]
+        input_tokens = usage.get("input_tokens")
+        output_tokens = usage.get("output_tokens")
+        total_tokens = usage.get("total_tokens")
+        if input_tokens is not None or output_tokens is not None:
+            counts = []
+            if input_tokens is not None:
+                counts.append(f"{input_tokens:,} in")
+            if output_tokens is not None:
+                counts.append(f"{output_tokens:,} out")
+            token_detail = " / ".join(counts) + " tokens"
+            if total_tokens is not None:
+                token_detail += f" ({total_tokens:,} total)"
+            details.append(token_detail)
+        details.append(f"{max(0.0, float(duration_seconds)):.1f}s")
+        value = "  $ " + "  |  ".join(details)
+
+        if self.console is None:
+            self._output(value)
+            return
+
+        from rich.text import Text
+
+        self.console.print(Text(value, style=f"{ACCENT} dim"))
 
     @contextmanager
     def response_stream(self):

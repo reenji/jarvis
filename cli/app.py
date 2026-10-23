@@ -179,6 +179,16 @@ def _run_interactive(
             return 130
 
 
+def _show_turn_status(ui, conversation) -> None:
+    render_status = getattr(ui, "turn_status", None)
+    if callable(render_status):
+        render_status(
+            getattr(conversation, "model", ""),
+            getattr(conversation, "last_usage", {}),
+            getattr(conversation, "last_duration_seconds", 0.0),
+        )
+
+
 async def _interactive(
     store: SessionStore,
     session_id: str | None,
@@ -304,6 +314,7 @@ async def _interactive(
             ui.error(f"ARGUS error: {str(exc)[:300]}")
             continue
         ui.assistant(answer)
+        _show_turn_status(ui, conversation)
 
 
 async def _ask_once(store: SessionStore, prompt: str, session_id: str | None) -> int:
@@ -328,6 +339,7 @@ async def _ask_once(store: SessionStore, prompt: str, session_id: str | None) ->
         ui.error(f"ARGUS error: {str(exc)[:300]}")
         return 1
     ui.assistant(answer)
+    _show_turn_status(ui, conversation)
     print(f"Session: {conversation.session_id}", file=sys.stderr)
     return 0
 
