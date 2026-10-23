@@ -6,9 +6,11 @@ import os
 import sys
 from contextlib import contextmanager
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from cli.banner import EYE_BANNER, banner_details
+from cli.terminal_profile import TerminalProfile, load_terminal_profile
 
 ACCENT = "#e1b753"
 ACCENT_DIM = "#806c3e"
@@ -23,9 +25,11 @@ class TerminalUI:
         error_console: Any | None = None,
         output: Callable[[str], None] | None = None,
         error_output: Callable[[str], None] | None = None,
+        profile: TerminalProfile | None = None,
     ) -> None:
         self._output = output or print
         self._error_output = error_output or (lambda text: print(text, file=sys.stderr))
+        self.profile = profile or load_terminal_profile()
         self.console = console
         self.error_console = error_console
         if console is None and output is None and error_output is None:
@@ -58,10 +62,157 @@ class TerminalUI:
 
         from rich.text import Text
 
-        line = Text("● ARGUS", style=f"bold {ACCENT}")
+        line = Text(f"● {self.profile.assistant_name}", style=f"bold {self.profile.colors.primary}")
         line.append(f"  {details.removeprefix('ARGUS CLI ')}", style="dim")
         self.console.print(line)
-        self.console.rule(style=ACCENT_DIM)
+        self.console.rule(style=self.profile.colors.secondary)
+
+    def dashboard(
+        self,
+        *,
+        package_version: str,
+        model: str,
+        session_id: str,
+        workspace: str | Path,
+        tool_declarations: list[dict[str, Any]] | None = None,
+        api_ready: bool | None = None,
+    ) -> None:
+        """Render the interactive startup dashboard in the current user's style."""
+        declarations = tool_declarations or []
+        groups = _group_tool_names(declarations)
+        workspace_name = Path(workspace).name or str(workspace)
+        workspace_name = _truncate(workspace_name, 34)
+        tool_count = len(declarations)
+        profile = self.profile
+
+        if self.console is None:
+            self._output(f"{profile.assistant_name} CLI v{package_version}")
+            self._output(f"User: {profile.user_name} | Theme: {profile.theme} | Model: {model}")
+            self._output(f"Session: {session_id[:12]} | Workspace: {workspace_name}")
+            if api_ready is not None:
+                api_status = "key configured" if api_ready else "key missing — run `argus setup`"
+                self._output(f"Gemini: {api_status}")
+            self._output(f"Available actions ({tool_count}):")
+            for category, names in groups.items():
+                self._output(f"  {category}: {', '.join(names)}")
+            self._output("Commands: /help  /status  /tools  /theme  /profile  /exit")
+            self._output("=" * 64)
+            return
+
+        from rich import box
+        from rich.columns import Columns
+        from rich.panel import Panel
+        from rich.table import Table
+        from rich.text import Text
+
+        colors = profile.colors
+        logo = Text(
+            " ███   ████    ████  █   █   ████\n"
+            "█   █  █   █  █      █   █  █    \n"
+            "█████  ████   █ ███  █   █   ███ \n"
+            "█   █  █  █   █   █  █   █      █\n"
+            "█   █  █   █   ████   ███   ████ ",
+            style=f"bold {colors.primary}",
+        )
+        title = Table.grid(expand=True)
+        title.add_column(ratio=1)
+        title.add_column(justify="right")
+        title.add_row(
+            logo,
+            Text(f"ARGUS CLI v{package_version}", style=f"bold {colors.secondary}"),
+        )
+        self.console.print(title)
+
+        status = Table.grid(padding=(0, 1))
+        status.add_column(style=f"{colors.primary} bold", no_wrap=True)
+        status.add_column(style="white")
+        status.add_row("agent", profile.assistant_name)
+        status.add_row("user", profile.user_name)
+        status.add_row("model", _truncate(model, 38))
+        status.add_row("session", session_id[:12])
+        status.add_row("workspace", workspace_name)
+        if api_ready is not None:
+            status.add_row(
+                "Gemini",
+                Text("key configured" if api_ready else "key missing · run argus setup",
+                     style=colors.success if api_ready else "bold yellow"),
+            )
+        status_panel = Panel(
+            status,
+            title=Text(" YOUR SESSION ", style=f"bold {colors.primary}"),
+            border_style=colors.secondary,
+            box=box.DOUBLE,
+            padding=(0, 1),
+        )
+
+        actions = Table.grid(padding=(0, 1))
+        actions.add_column(style=f"{colors.primary} bold", no_wrap=True)
+        actions.add_column(style="white")
+        if groups:
+            for category, names in groups.items():
+                actions.add_row(category, ", ".join(names))
+        else:
+            actions.add_row("status", "Action inventory unavailable")
+        action_panel = Panel(
+            actions,
+            title=Text(f" AVAILABLE ACTIONS · {tool_count} ", style=f"bold {colors.primary}"),
+            border_style=colors.secondary,
+            box=box.DOUBLE,
+            padding=(0, 1),
+        )
+
+        width = getattr(getattr(self.console, "size", None), "width", 100)
+        panels = [status_panel, action_panel]
+        self.console.print(Columns(panels, equal=True, expand=True) if width >= 94 else panels[0])
+        if width < 94:
+            self.console.print(action_panel)
+
+        shortcuts = Text()
+        shortcuts.append("/help", style=f"bold {colors.primary}")
+        shortcuts.append(" help   ")
+        shortcuts.append("/tools", style=f"bold {colors.primary}")
+        shortcuts.append(" actions   ")
+        shortcuts.append("/theme", style=f"bold {colors.primary}")
+        shortcuts.append(" personalize   ")
+        shortcuts.append("/exit", style=f"bold {colors.primary}")
+        shortcuts.append(" save & exit")
+        self.console.print(Panel(shortcuts, border_style=colors.muted, box=box.SQUARE, padding=(0, 1)))
+
+    def show_status(self, *, model: str, session_id: str, tool_count: int, api_ready: bool) -> None:
+        """Show a compact live status block, matching the startup dashboard."""
+        self.info(
+            f"{self.profile.assistant_name} · {self.profile.user_name} · theme {self.profile.theme}\n"
+            f"model {model} · session {session_id[:12]} · {tool_count} actions · "
+            f"Gemini {'key configured' if api_ready else 'needs setup'}"
+        )
+
+    def show_tools(self, tool_declarations: list[dict[str, Any]]) -> None:
+        """List the full action inventory without loading descriptions or secrets."""
+        names = sorted(
+            str(declaration.get("name", "")).strip()
+            for declaration in tool_declarations
+            if declaration.get("name")
+        )
+        if self.console is None:
+            self._output(f"Available actions ({len(names)}):")
+            for name in names:
+                self._output(f"  · {name}")
+            return
+
+        from rich import box
+        from rich.panel import Panel
+        from rich.text import Text
+
+        content = Text("  · " + "\n  · ".join(names), style="white") if names else Text("No actions are enabled.")
+        self.console.print(
+            Panel(
+                content,
+                title=f"AVAILABLE ACTIONS · {len(names)}",
+                border_style=self.profile.colors.secondary,
+                box=box.DOUBLE,
+                padding=(0, 1),
+            )
+        )
 
     def info(self, text: str) -> None:
         if self.console is None:
@@ -69,7 +220,7 @@ class TerminalUI:
             return
         from rich.text import Text
 
-        self.console.print(Text(text, style="dim cyan"))
+        self.console.print(Text(text, style=f"dim {self.profile.colors.secondary}"))
 
     def system(self, text: str) -> None:
         value = str(text)
@@ -80,7 +231,10 @@ class TerminalUI:
         from rich.text import Text
 
         finished = value.startswith("Finished ")
-        line = Text("  ✓ " if finished else "  ◌ ", style=SUCCESS if finished else ACCENT)
+        line = Text(
+            "  ✓ " if finished else "  ◌ ",
+            style=self.profile.colors.success if finished else self.profile.colors.primary,
+        )
         if already_prefixed:
             value = value[len("[ARGUS] "):]
         line.append(value, style="dim")
@@ -97,7 +251,7 @@ class TerminalUI:
 
     def assistant(self, text: str) -> None:
         if self.console is None:
-            self._output(f"ARGUS> {text}")
+            self._output(f"{self.profile.assistant_name}> {text}")
             return
 
         from rich.markdown import Markdown
@@ -107,8 +261,8 @@ class TerminalUI:
         self.console.print(
             Panel(
                 Markdown(str(text)),
-                title=Text("ARGUS", style=f"bold {ACCENT}"),
-                border_style=ACCENT,
+                title=Text(self.profile.assistant_name, style=f"bold {self.profile.colors.primary}"),
+                border_style=self.profile.colors.primary,
                 padding=(0, 1),
             )
         )
@@ -125,8 +279,8 @@ class TerminalUI:
         self.console.print(
             Panel(
                 Text(value, style="bold white"),
-                title=Text("● REQUEST", style=f"bold {ACCENT}"),
-                border_style=ACCENT_DIM,
+                title=Text(f"● {self.profile.user_name}", style=f"bold {self.profile.colors.primary}"),
+                border_style=self.profile.colors.secondary,
                 padding=(0, 1),
             )
         )
@@ -161,7 +315,7 @@ class TerminalUI:
 
         from rich.text import Text
 
-        self.console.print(Text(value, style=f"{ACCENT} dim"))
+        self.console.print(Text(value, style=f"{self.profile.colors.primary} dim"))
 
     @contextmanager
     def response_stream(self):
@@ -176,7 +330,11 @@ class TerminalUI:
 
         buffer = []
         with Live(
-            Panel(Markdown("Respondendo…"), title="ARGUS", border_style=ACCENT),
+            Panel(
+                Markdown("Respondendo…"),
+                title=self.profile.assistant_name,
+                border_style=self.profile.colors.primary,
+            ),
             console=self.console,
             transient=True,
             refresh_per_second=12,
@@ -186,10 +344,56 @@ class TerminalUI:
                 live.update(
                     Panel(
                         Markdown("".join(buffer)),
-                        title="ARGUS",
-                        border_style=ACCENT,
+                        title=self.profile.assistant_name,
+                        border_style=self.profile.colors.primary,
                     ),
                     refresh=True,
                 )
 
             yield update
+
+
+def _truncate(value: object, limit: int) -> str:
+    text = str(value or "")
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)] + "…"
+
+
+def _group_tool_names(declarations: list[dict[str, Any]]) -> dict[str, list[str]]:
+    groups: dict[str, list[str]] = {
+        "desktop": [],
+        "web": [],
+        "media": [],
+        "files & work": [],
+        "messaging": [],
+        "other": [],
+    }
+    for declaration in declarations:
+        name = str(declaration.get("name", "")).strip()
+        if not name:
+            continue
+        lowered = name.casefold()
+        if any(token in lowered for token in ("computer", "screen", "open_app", "desktop", "window")):
+            category = "desktop"
+        elif any(token in lowered for token in ("browser", "search", "web", "youtube")):
+            category = "web"
+        elif any(token in lowered for token in ("media", "music", "spotify")):
+            category = "media"
+        elif any(token in lowered for token in ("file", "document", "presentation", "spreadsheet", "knowledge")):
+            category = "files & work"
+        elif any(token in lowered for token in ("message", "discord", "email", "mail", "telegram", "whatsapp")):
+            category = "messaging"
+        else:
+            category = "other"
+        groups[category].append(name)
+
+    visible: dict[str, list[str]] = {}
+    for category, names in groups.items():
+        if not names:
+            continue
+        shown = names[:4]
+        if len(names) > len(shown):
+            shown.append(f"+{len(names) - len(shown)} more")
+        visible[category] = shown
+    return visible
