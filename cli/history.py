@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-import sys
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
+
+from config.paths import default_argus_data_dir
 
 
 @dataclass(frozen=True)
@@ -28,16 +29,7 @@ def default_database_path() -> Path:
     if override:
         return Path(override).expanduser()
 
-    argus_home = os.environ.get("ARGUS_HOME")
-    if argus_home:
-        root = Path(argus_home).expanduser()
-    elif sys.platform == "win32":
-        root = Path(os.environ.get("LOCALAPPDATA") or Path.home() / "AppData" / "Local") / "Argus"
-    elif sys.platform == "darwin":
-        root = Path.home() / "Library" / "Application Support" / "Argus"
-    else:
-        root = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "argus"
-    return root / "sessions.sqlite3"
+    return default_argus_data_dir() / "sessions.sqlite3"
 
 
 class SessionStore:

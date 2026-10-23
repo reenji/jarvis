@@ -16,11 +16,14 @@ from typing import List, Optional, Literal
 from pydantic import Field, validator
 from pydantic_settings import BaseSettings
 
+from config.user_config import get_configured_gemini_key, load_user_config
+
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
 class LLMSettings(BaseSettings):
     provider: Literal["gemini", "openai", "ollama"] = "gemini"
+    model: str = "gemini-2.5-flash"
     fallback_providers: List[str] = []
 
     # API keys
@@ -36,6 +39,7 @@ class LLMSettings(BaseSettings):
 
 
 class VoiceSettings(BaseSettings):
+    enabled: bool = False
     name: str = "puck"
 
     class Config:
@@ -111,12 +115,24 @@ class Settings(BaseSettings):
         if not isinstance(v, dict):
             v = {}
 
-        # GEMINI_API_KEY legacy key — check prefixed var first, then bare var
+        # Environment remains the highest-precedence source.
         env_gemini_key = os.environ.get("ARGUS_LLM_GEMINI_API_KEY") or os.environ.get("GEMINI_API_KEY")
         if env_gemini_key:
             v.setdefault("gemini_api_key", env_gemini_key)
-        elif v.get("gemini_api_key") is None and legacy.get("api_key"):
-            v.setdefault("gemini_api_key", legacy["api_key"])
+        elif v.get("gemini_api_key") is None:
+            configured_key = get_configured_gemini_key()
+            if configured_key:
+                v.setdefault("gemini_api_key", configured_key)
+            elif legacy.get("api_key"):
+                v.setdefault("gemini_api_key", legacy["api_key"])
+
+        user_config = load_user_config()
+        user_llm = user_config.get("llm") or {}
+        if isinstance(user_llm, dict):
+            if os.environ.get("ARGUS_LLM_MODEL") is None and user_llm.get("model"):
+                v.setdefault("model", str(user_llm["model"]))
+            if os.environ.get("ARGUS_LLM_PROVIDER") is None and user_llm.get("provider"):
+                v.setdefault("provider", str(user_llm["provider"]))
 
         return v
 
@@ -134,10 +150,22 @@ class Settings(BaseSettings):
             v = {}
 
         env_voice = os.environ.get("GEMINI_VOICE_NAME")
+        user_config = load_user_config()
+        user_voice = user_config.get("voice") or {}
+        if not isinstance(user_voice, dict):
+            user_voice = {}
         if env_voice:
             v.setdefault("name", env_voice)
+        elif user_voice.get("name"):
+            v.setdefault("name", str(user_voice["name"]))
         elif v.get("name") in (None, "") and legacy.get("voice_name"):
             v.setdefault("name", legacy["voice_name"])
+
+        env_voice_enabled = os.environ.get("ARGUS_VOICE_ENABLED")
+        if env_voice_enabled is not None:
+            v.setdefault("enabled", env_voice_enabled)
+        elif "enabled" in user_voice:
+            v.setdefault("enabled", user_voice["enabled"])
 
         return v
 
@@ -178,7 +206,7 @@ def get_api_key() -> str:
         raise ValueError(
             "GEMINI_API_KEY not set. Set via environment "
             "ARGUS_LLM_GEMINI_API_KEY or GEMINI_API_KEY, "
-            "or config/api_keys.json"
+            "run `argus setup`, or use config/api_keys.json"
         )
     return settings.llm.gemini_api_key
 
