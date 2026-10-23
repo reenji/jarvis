@@ -1,0 +1,69 @@
+"""Safe user-facing config inspection and preference editing."""
+
+from __future__ import annotations
+
+import os
+from collections.abc import Callable
+from typing import Any
+
+from config.settings import get_settings
+from config.user_config import (
+    UserConfigError,
+    get_gemini_key_source,
+    load_user_config,
+    save_user_config,
+    user_config_path,
+)
+
+
+def show_config(output: Callable[[str], None] = print) -> int:
+    try:
+        settings = get_settings()
+        source = get_gemini_key_source()
+    except UserConfigError as exc:
+        output(str(exc))
+        return 2
+
+    key_status = f"configured ({source or 'legacy source'})" if settings.llm.gemini_api_key else "not configured"
+    output(f"Configuration path: {user_config_path()}")
+    output(f"Gemini API key: {key_status}; value hidden")
+    output(f"LLM model: {os.environ.get('ARGUS_CLI_MODEL') or settings.llm.model}")
+    output(f"Voice enabled: {'yes' if settings.voice.enabled else 'no'}")
+    output(f"Voice name: {settings.voice.name}")
+    return 0
+
+
+def _parse_value(key: str, value: str) -> Any:
+    if key == "voice.enabled":
+        normalized = value.strip().casefold()
+        if normalized in {"true", "yes", "on", "1", "sim", "s"}:
+            return True
+        if normalized in {"false", "no", "off", "0", "nao", "não", "n"}:
+            return False
+        raise ValueError("voice.enabled must be true or false.")
+    if key in {"voice.name", "llm.model"}:
+        cleaned = value.strip()
+        if not cleaned or len(cleaned) > 120:
+            raise ValueError(f"{key} must contain 1 to 120 characters.")
+        return cleaned
+    if key == "llm.gemini_api_key":
+        raise ValueError("Use `argus setup` to enter the Gemini key without exposing it in shell history.")
+    raise ValueError("Supported keys: voice.enabled, voice.name, llm.model.")
+
+
+def set_config_value(key: str, value: str, output: Callable[[str], None] = print) -> int:
+    try:
+        parsed = _parse_value(key, value)
+        config = load_user_config()
+        section_name, field_name = key.split(".", maxsplit=1)
+        section = config.setdefault(section_name, {})
+        if not isinstance(section, dict):
+            section = {}
+            config[section_name] = section
+        section[field_name] = parsed
+        path = save_user_config(config)
+    except (ValueError, UserConfigError) as exc:
+        output(str(exc))
+        return 2
+    output(f"Saved {key} in {path}.")
+    return 0

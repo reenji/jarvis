@@ -30,6 +30,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     delete = commands.add_parser("delete", help="delete a saved session")
     delete.add_argument("session_id", help="session ID or unique ID prefix")
+
+    commands.add_parser("setup", help="configure Gemini and optional voice")
+    commands.add_parser("doctor", help="check configuration and local capabilities")
+
+    config = commands.add_parser("config", help="inspect or change user configuration")
+    config_commands = config.add_subparsers(dest="config_command", required=True)
+    config_commands.add_parser("path", help="print the user configuration path")
+    config_commands.add_parser("show", help="show effective settings with secrets hidden")
+    config_set = config_commands.add_parser("set", help="set a supported preference")
+    config_set.add_argument("key", help="voice.enabled, voice.name, or llm.model")
+    config_set.add_argument("value", help="new preference value")
     return parser
 
 
@@ -100,6 +111,7 @@ async def _interactive(store: SessionStore, session_id: str | None) -> int:
                 print(
                     "/new — start a new session\n"
                     "/sessions — list saved sessions\n"
+                    "/doctor — check configuration and capabilities\n"
                     "/resume ID — switch to a saved session\n"
                     "/clear — clear this session's conversation\n"
                     "/delete ID — delete a saved session\n"
@@ -108,6 +120,11 @@ async def _interactive(store: SessionStore, session_id: str | None) -> int:
                 continue
             if command == "/sessions":
                 _show_sessions(store)
+                continue
+            if command == "/doctor":
+                from cli.doctor import run_doctor
+
+                run_doctor()
                 continue
             if command == "/new":
                 conversation = _new_conversation(store, None)
@@ -168,6 +185,26 @@ async def _ask_once(store: SessionStore, prompt: str, session_id: str | None) ->
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+
+    if args.command == "setup":
+        from cli.setup import run_setup
+
+        return run_setup()
+    if args.command == "doctor":
+        from cli.doctor import run_doctor
+
+        return run_doctor()
+    if args.command == "config":
+        from cli.config_commands import set_config_value, show_config
+        from config.user_config import user_config_path
+
+        if args.config_command == "path":
+            print(user_config_path())
+            return 0
+        if args.config_command == "show":
+            return show_config()
+        return set_config_value(args.key, args.value)
+
     try:
         store = SessionStore()
     except OSError as exc:
