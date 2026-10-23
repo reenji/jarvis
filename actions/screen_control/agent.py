@@ -9,6 +9,7 @@ import re
 import time
 import unicodedata
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
@@ -130,8 +131,16 @@ def _share_intent(goal: str) -> bool:
     return (explicit_share and (file_target or sensitive_file_ref)) or explicit_send_file or (sensitive_file_ref and any(word in text for word in ("send", "enviar", "envie", "mandar", "mande")))
 
 
-def _anti_bot_verification_visible(window_title: str, process_name: str, controls: list) -> bool:
+def _anti_bot_verification_visible(
+    window_title: str,
+    process_name: str,
+    controls: list,
+    *,
+    extra_text: str = "",
+) -> bool:
     labels = [str(window_title or ""), str(process_name or "")]
+    if extra_text:
+        labels.append(str(extra_text))
     for control in controls:
         if isinstance(control, dict):
             labels.append(str(control.get("name", "") or ""))
@@ -145,23 +154,31 @@ def _anti_bot_verification_visible(window_title: str, process_name: str, control
         "tráfego incomum",
         "i am not a robot",
         "im not a robot",
+        "i'm not a robot",
+        "i’m not a robot",
         "verify you are human",
+        "verify you are a human",
+        "recaptcha",
+        "security check",
+        "checking your browser",
+        "complete the security check",
         "captcha",
     ))
 
 
 def _sensitive_visible_file(goal: str, controls: list) -> tuple[str, str] | None:
+    if not _share_intent(goal):
+        return None
     sensitive_names = re.findall(
         r"(?i)(?:\.env(?:\.[A-Za-z0-9_.-]+)?|docker-compose(?:\.[A-Za-z0-9_.-]+)?|"
         r"dockerfile|credentials?(?:\.[A-Za-z0-9_.-]+)?|secrets?(?:\.[A-Za-z0-9_.-]+)?|"
         r"id_rsa|id_ed25519|[A-Za-z0-9_.-]*private[-_ ]?key[A-Za-z0-9_.-]*)",
         str(goal or ""),
     )
-    if _share_intent(goal):
-        for name in sensitive_names:
-            reason = sensitive_file_reason(name)
-            if reason:
-                return name, reason
+    for name in sensitive_names:
+        reason = sensitive_file_reason(name)
+        if reason:
+            return name, reason
     # A full path supplied by the user allows checking small text/config files locally.
     goal_text = str(goal or "")
     quoted_paths = re.findall(r"['\"]((?:[A-Za-z]:\\|/)[^'\"]+)['\"]", goal_text)
@@ -170,15 +187,14 @@ def _sensitive_visible_file(goal: str, controls: list) -> tuple[str, str] | None
         reason = sensitive_file_reason(candidate.strip().rstrip(".,;:"))
         if reason:
             return Path(candidate.strip().rstrip(".,;:")).name, reason
-    if _share_intent(goal):
-        for control in controls:
-            name = str(getattr(control, "name", "") or (control.get("name", "") if isinstance(control, dict) else ""))
-            selected = bool(getattr(control, "selected", False) or (control.get("selected", False) if isinstance(control, dict) else False))
-            if not selected:
-                continue
-            reason = sensitive_file_reason(name)
-            if reason:
-                return name, reason
+    for control in controls:
+        name = str(getattr(control, "name", "") or (control.get("name", "") if isinstance(control, dict) else ""))
+        selected = bool(getattr(control, "selected", False) or (control.get("selected", False) if isinstance(control, dict) else False))
+        if not selected:
+            continue
+        reason = sensitive_file_reason(name)
+        if reason:
+            return name, reason
     return None
 
 
@@ -214,7 +230,14 @@ class ScreenAgent:
             time.sleep(0.4)
         return False
 
-    def run(self, objective: str, *, window_title: str = "", allow_sensitive_share: bool = False) -> ScreenRunResult:
+    def run(
+        self,
+        objective: str,
+        *,
+        window_title: str = "",
+        allow_sensitive_share: bool = False,
+        confirm_sensitive_share: Callable[[str, str], bool] | None = None,
+    ) -> ScreenRunResult:
         goal = " ".join(str(objective or "").split())
         window_title = str(window_title or "").strip() or infer_window_title(goal)
         run_id = uuid.uuid4().hex[:12]
@@ -255,18 +278,28 @@ class ScreenAgent:
                 file_risk = _sensitive_visible_file(goal, controls)
                 if file_risk and not allow_sensitive_share:
                     name, reason = file_risk
+                    if confirm_sensitive_share is None:
+                        return ScreenRunResult(
+                            "ask_user",
+                            f"O arquivo {name!r} parece ser {reason}. Confirma que devo compartilhá-lo?",
+                            step - 1,
+                            run_id,
+                        )
+                    try:
+                        allow_sensitive_share = bool(confirm_sensitive_share(name, reason))
+                    except Exception:
+                        allow_sensitive_share = False
+                    if not allow_sensitive_share:
+                        return ScreenRunResult(
+                            "aborted",
+                            f"Não compartilhei {name!r} sem confirmação explícita.",
+                            step - 1,
+                            run_id,
+                        )
+                if _anti_bot_verification_visible(capture.window.title, capture.window.process_name, controls):
                     return ScreenRunResult(
-                        "ask_user",
-                        f"O arquivo {name!r} parece ser {reason}. Confirma que devo compartilhá-lo?",
-                        step - 1,
-                        run_id,
-                    )
-                if _anti_bot_verification_visible(
-                    capture.window.title, capture.window.process_name, controls
-                ):
-                    return ScreenRunResult(
-                        "fail",
-                        "A página apresentou uma verificação anti-robô. Parei sem interagir, repetir a busca ou tentar contorná-la.",
+                        "blocked",
+                        "Encontrei uma verificação anti-robô. Parei antes de interagir; resolva-a manualmente no navegador.",
                         step - 1,
                         run_id,
                     )
@@ -280,6 +313,25 @@ class ScreenAgent:
                     )
                 except Exception as exc:
                     return ScreenRunResult("fail", f"Não consegui decidir a próxima ação na tela: {exc}", step - 1, run_id)
+
+                decision_text = " ".join((
+                    str(decision.observation or ""),
+                    str(decision.evidence or ""),
+                    str(decision.target_description or ""),
+                    str(decision.summary or ""),
+                ))
+                if _anti_bot_verification_visible(
+                    capture.window.title,
+                    capture.window.process_name,
+                    controls,
+                    extra_text=decision_text,
+                ):
+                    return ScreenRunResult(
+                        "blocked",
+                        "Encontrei uma verificação anti-robô na página. Parei sem clicar, repetir a busca ou tentar contorná-la.",
+                        step - 1,
+                        run_id,
+                    )
 
                 if decision.action == ActionType.DONE:
                     summary = decision.summary or "Concluí o pedido e confirmei o resultado na tela."

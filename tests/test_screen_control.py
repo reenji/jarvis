@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -13,7 +14,7 @@ from actions.screen_control.config import ScreenConfig
 from actions.screen_control.schemas import ActionType, ScreenAction
 from actions.screen_control.safety import sensitive_file_reason
 from actions.screen_control.window import WindowInfo
-from actions.screen_control.agent import _share_intent
+from actions.screen_control.agent import _share_intent, _sensitive_visible_file
 from actions.screen_control.safety import is_blocked_process, is_blocked_terminal_target
 
 
@@ -71,6 +72,8 @@ def test_sensitive_file_detection_covers_env_docker_and_secret_contents():
 def test_file_confirmation_policy_only_triggers_for_file_sharing():
     assert _share_intent("Compartilhe o arquivo docker-compose.yml com a equipe")
     assert not _share_intent("Compartilhe minha tela do Discord com a equipe")
+    assert _sensitive_visible_file("Abra C:\\workspace\\.env no editor", []) is None
+    assert _sensitive_visible_file("Compartilhe C:\\workspace\\.env", []) is not None
 
 
 @pytest.mark.parametrize("process", ["WindowsTerminal.exe", "powershell.exe", "gnome-terminal-server", "iTerm2"])
@@ -136,6 +139,87 @@ def test_screen_agent_verifies_success_after_two_observations():
     assert result.status == "success"
     assert result.steps_taken == 1
     assert "Mike" in result.summary
+
+
+def test_screen_agent_stops_on_accessible_anti_bot_challenge_before_deciding():
+    capture = _capture()
+    agent = ScreenAgent(abort_controller=_NoopAbort())
+    with (
+        patch("actions.screen_control.agent.capture_active_window", return_value=capture),
+        patch("actions.screen_control.agent.describe_controls", return_value=[{"name": "I'm not a robot"}]),
+        patch("actions.screen_control.agent.bring_to_front", return_value=True),
+        patch("actions.screen_control.agent.time.sleep"),
+        patch("actions.screen_control.agent.decide_next_action") as decide,
+        patch("actions.screen_control.agent.execute") as execute,
+    ):
+        result = agent.run("Pesquise no navegador sobre o clima", window_title="Google Chrome")
+    assert result.status == "blocked"
+    assert "anti-robô" in result.summary
+    decide.assert_not_called()
+    execute.assert_not_called()
+
+
+def test_screen_agent_stops_when_vision_identifies_anti_bot_challenge():
+    capture = _capture()
+    agent = ScreenAgent(abort_controller=_NoopAbort())
+    click = ScreenAction(
+        ActionType.CLICK,
+        observation="A página mostra uma verificação reCAPTCHA.",
+        target_description="Não sou um robô",
+        x=500,
+        y=500,
+    )
+    with (
+        patch("actions.screen_control.agent.capture_active_window", return_value=capture),
+        patch("actions.screen_control.agent.describe_controls", return_value=[]),
+        patch("actions.screen_control.agent.bring_to_front", return_value=True),
+        patch("actions.screen_control.agent.time.sleep"),
+        patch("actions.screen_control.agent.decide_next_action", return_value=click),
+        patch("actions.screen_control.agent.execute") as execute,
+    ):
+        result = agent.run("Pesquise no navegador sobre o clima", window_title="Google Chrome")
+    assert result.status == "blocked"
+    assert "anti-robô" in result.summary
+    execute.assert_not_called()
+
+
+def test_screen_tool_waits_for_manual_challenge_resolution_and_retries_once():
+    import asyncio
+    from actions.screen_control.agent import ScreenRunResult
+    from tools import screen_control
+
+    class FakeAgent:
+        def __init__(self):
+            self.results = iter((
+                ScreenRunResult("blocked", "Resolva manualmente.", 0, "one"),
+                ScreenRunResult("success", "A pesquisa foi concluída.", 2, "two"),
+            ))
+            self.calls = []
+
+        def run(self, objective, **kwargs):
+            self.calls.append((objective, kwargs))
+            return next(self.results)
+
+    class FakeClient:
+        def __init__(self):
+            self.waited = 0
+
+        def wait_for_manual_browser_resolution(self):
+            self.waited += 1
+            return True
+
+    fake_agent = FakeAgent()
+    client = FakeClient()
+    context = SimpleNamespace(client=client)
+    with (
+        patch("actions.screen_control.ScreenAgent", return_value=fake_agent),
+        patch("core.computer_control_preferences.load_direct_computer_control", return_value=True),
+    ):
+        result = asyncio.run(screen_control.execute(context, {"action": "act", "objective": "Pesquise no navegador"}))
+
+    assert result["status"] == "success"
+    assert fake_agent.calls[0][0] == fake_agent.calls[1][0] == "Pesquise no navegador"
+    assert client.waited == 1
 
 
 def test_screen_agent_launches_named_app_then_focuses_before_interacting():
@@ -225,6 +309,45 @@ def test_sensitive_file_share_is_held_before_any_action():
     assert result.status == "ask_user"
     assert "confirma" in result.summary.casefold()
     decide.assert_not_called()
+
+
+def test_sensitive_file_share_continues_only_after_explicit_confirmation():
+    capture = _capture()
+    confirm = Mock(return_value=True)
+    agent = ScreenAgent(abort_controller=_NoopAbort())
+    done = ScreenAction(ActionType.DONE, summary="O arquivo foi compartilhado.")
+    with (
+        patch("actions.screen_control.agent.capture_active_window", return_value=capture),
+        patch("actions.screen_control.agent.describe_controls", return_value=[]),
+        patch("actions.screen_control.agent.decide_next_action", return_value=done),
+        patch("actions.screen_control.agent.time.sleep"),
+    ):
+        result = agent.run(
+            "Compartilhe C:\\workspace\\.env com a equipe",
+            confirm_sensitive_share=confirm,
+        )
+    assert result.status == "success"
+    confirm.assert_called_once()
+
+
+def test_sensitive_file_share_stops_when_confirmation_is_declined():
+    capture = _capture()
+    confirm = Mock(return_value=False)
+    agent = ScreenAgent(abort_controller=_NoopAbort())
+    with (
+        patch("actions.screen_control.agent.capture_active_window", return_value=capture),
+        patch("actions.screen_control.agent.describe_controls", return_value=[]),
+        patch("actions.screen_control.agent.decide_next_action") as decide,
+        patch("actions.screen_control.agent.execute") as execute,
+    ):
+        result = agent.run(
+            "Compartilhe C:\\workspace\\.env com a equipe",
+            confirm_sensitive_share=confirm,
+        )
+    assert result.status == "aborted"
+    confirm.assert_called_once()
+    decide.assert_not_called()
+    execute.assert_not_called()
 
 
 def test_screen_tool_registry_exposes_local_screen_control():

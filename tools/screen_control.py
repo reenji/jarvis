@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 
@@ -41,9 +42,32 @@ async def execute(ctx, args: dict[str, Any]) -> dict[str, Any]:
         return {"result": "Ação de tela desconhecida."}
     if not load_direct_computer_control():
         return {"result": "O controle direto do mouse e teclado está desativado em Configurações → Ações. Nenhuma ação foi executada."}
-    result = await __import__("asyncio").to_thread(
+    objective = str(args.get("objective", "") or "")
+    window_title = str(args.get("window_title", "") or "")
+    result = await asyncio.to_thread(
         agent.run,
-        str(args.get("objective", "") or ""),
-        window_title=str(args.get("window_title", "") or ""),
+        objective,
+        window_title=window_title,
+        confirm_sensitive_share=getattr(ctx.client, "confirm_sensitive_file", None),
     )
+    if result.status == "blocked":
+        wait_for_user = getattr(ctx.client, "wait_for_manual_browser_resolution", None)
+        if callable(wait_for_user):
+            resumed = await asyncio.to_thread(wait_for_user)
+            if resumed:
+                # A single new observation resumes the original task only after
+                # the user says the challenge is resolved. If it remains, stop.
+                result = await asyncio.to_thread(
+                    agent.run,
+                    objective,
+                    window_title=window_title,
+                    confirm_sensitive_share=getattr(ctx.client, "confirm_sensitive_file", None),
+                )
+            else:
+                result = type(result)(
+                    "aborted",
+                    "Não retomei a automação. Repita o pedido depois de resolver a verificação.",
+                    result.steps_taken,
+                    result.run_id,
+                )
     return {"result": result.summary, "status": result.status, "steps_taken": result.steps_taken}
