@@ -19,6 +19,7 @@ import ui
 from core import intro_tts
 from ui.hud.orb import ActivityVisualizer, ReactorOrb
 from ui.motion import resolve_reduced_motion
+from ui.theme.tokens import TOKENS
 
 
 class _NoSecrets:
@@ -409,6 +410,15 @@ class UIRegressionTests(unittest.TestCase):
         overlay.finish()
         overlay.finish()
         self.assertEqual(emissions, [True])
+        overlay.deleteLater()
+
+    def test_intro_skip_button_styles_keep_token_geometry(self):
+        overlay = ui.FirstRunIntroOverlay(duration_s=1.0, speak=False)
+        style = overlay._skip_button.styleSheet()
+
+        self.assertIn(f"border-radius: {TOKENS.radii['control']}px", style)
+        self.assertIn(f"padding: {TOKENS.spacing['legacy_0']}px {TOKENS.spacing['legacy_14']}px", style)
+        overlay.finish()
         overlay.deleteLater()
 
     def test_live_intro_reveals_the_real_console_widgets_in_sequence(self):
