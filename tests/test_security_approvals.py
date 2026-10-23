@@ -119,6 +119,7 @@ class LiveDispatchApprovalTests(unittest.TestCase):
             set_state=MagicMock(),
             write_log=MagicMock(),
         )
+        self.argus.client = self.argus.ui
         self.argus.cloud_safe = False
         self.argus._current_input_transcript = ""
         self.argus._last_input_transcript = ""
