@@ -35,6 +35,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="resume the most recently used session",
     )
     parser.add_argument(
+        "--resume",
+        dest="resume_session",
+        metavar="ID",
+        help="resume a saved session by ID",
+    )
+    parser.add_argument(
         "--no-banner",
         action="store_true",
         help="hide the startup banner",
@@ -323,8 +329,14 @@ async def _ask_once(store: SessionStore, prompt: str, session_id: str | None) ->
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command is not None and (args.quick_question is not None or args.continue_session):
-        parser.error("-q/--question and --continue cannot be combined with a subcommand")
+    if args.command is not None and (
+        args.quick_question is not None
+        or args.continue_session
+        or args.resume_session is not None
+    ):
+        parser.error("-q/--question, --continue, and --resume cannot be combined with a subcommand")
+    if args.resume_session is not None and (args.quick_question is not None or args.continue_session):
+        parser.error("--resume cannot be combined with -q/--question or --continue")
     if args.voice and (args.command is not None or args.quick_question is not None or args.continue_session):
         parser.error("--voice cannot be combined with a subcommand, -q/--question, or --continue")
     if args.quick_question is not None and not args.quick_question.strip():
@@ -348,7 +360,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_doctor()
     if args.command == "voice":
         return _run_voice(show_banner=show_banner)
-    if args.command is None and args.quick_question is None and not args.continue_session:
+    if (
+        args.command is None
+        and args.quick_question is None
+        and not args.continue_session
+        and args.resume_session is None
+    ):
         try:
             if _default_voice_enabled():
                 return _run_voice(show_banner=show_banner)
@@ -376,6 +393,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         latest = store.list(limit=1) if args.continue_session else []
         session_id = latest[0].id if latest else None
         return asyncio.run(_ask_once(store, args.quick_question.strip(), session_id))
+    if args.resume_session is not None:
+        try:
+            session_id = _resolve_session(store, args.resume_session)
+        except ValueError as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        return _run_interactive(store, session_id, show_banner=show_banner)
     if args.continue_session:
         latest = store.list(limit=1)
         session_id = latest[0].id if latest else None

@@ -59,6 +59,7 @@ class SessionStoreTests(unittest.TestCase):
         self.assertEqual(parser.parse_args(["chat", "--resume", "abc"]).session, "abc")
         self.assertEqual(parser.parse_args(["-q", "hello"]).quick_question, "hello")
         self.assertTrue(parser.parse_args(["--continue"]).continue_session)
+        self.assertEqual(parser.parse_args(["--resume", "abc"]).resume_session, "abc")
         self.assertTrue(parser.parse_args(["--voice"]).voice)
         self.assertEqual(parser.parse_args(["sessions", "--limit", "5"]).limit, 5)
         self.assertTrue(parser.parse_args(["--debug-screens", "ask", "hello"]).debug_screens)
@@ -86,6 +87,14 @@ class SessionStoreTests(unittest.TestCase):
             [call.args for call in chat.await_args_list],
             [(store, "latest-session"), (store, None)],
         )
+
+    def test_resume_flag_opens_the_requested_session(self):
+        store = Mock()
+        store.resolve.return_value = "resolved-session"
+        with patch("cli.app.SessionStore", return_value=store):
+            with patch("cli.app._run_interactive", return_value=0) as chat:
+                self.assertEqual(main(["--resume", "resumable-prefix"]), 0)
+        chat.assert_called_once_with(store, "resolved-session", show_banner=False)
 
     def test_interactive_session_continues_after_a_cancelled_turn(self):
         from contextlib import contextmanager
