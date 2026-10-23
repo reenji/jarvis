@@ -1,4 +1,4 @@
-"""Transport-neutral client contract for the ARGUS live engine."""
+"""Client contracts for the transport-neutral ARGUS live engine."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from typing import Any, Protocol, runtime_checkable
 
 
 class VoiceSelector(Protocol):
-    """Small legacy surface used to read the desktop voice selector."""
+    """Small legacy surface used to read a desktop voice selector."""
 
     def currentIndex(self) -> int: ...
 
@@ -18,13 +18,27 @@ class VoiceSelector(Protocol):
 
 @runtime_checkable
 class ArgusClient(Protocol):
-    """Events and state the live engine needs from any connected client.
+    """Transport-neutral events required by the live conversation engine.
 
-    The PyQt desktop adapter and future WebSocket adapter can both implement
-    this contract without the engine importing either UI framework.
+    Desktop, terminal, and hosted adapters implement these conversation events.
+    Adapter-specific controls such as themes and window commands are optional
+    capabilities and deliberately do not belong to this base contract.
     """
 
     on_text_command: Callable[[str], None] | None
+
+    def write_log(self, text: str) -> None: ...
+
+    def set_state(self, state: str) -> None: ...
+
+    def show_subtitle(self, text: str) -> None: ...
+
+    def clear_subtitle(self) -> None: ...
+
+
+@runtime_checkable
+class ArgusDesktopClient(ArgusClient, Protocol):
+    """Optional desktop controls consumed only when an adapter provides them."""
 
     @property
     def muted(self) -> bool: ...
@@ -34,14 +48,6 @@ class ArgusClient(Protocol):
 
     @property
     def _voice_combo(self) -> VoiceSelector | None: ...
-
-    def write_log(self, text: str) -> None: ...
-
-    def set_state(self, state: str) -> None: ...
-
-    def show_subtitle(self, text: str) -> None: ...
-
-    def clear_subtitle(self) -> None: ...
 
     def set_theme(self, theme_key: str) -> None: ...
 
