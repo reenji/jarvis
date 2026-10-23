@@ -57,6 +57,14 @@ class SessionStoreTests(unittest.TestCase):
         self.assertEqual(parser.parse_args(["chat", "--resume", "abc"]).session, "abc")
         self.assertEqual(parser.parse_args(["sessions", "--limit", "5"]).limit, 5)
         self.assertTrue(parser.parse_args(["--debug-screens", "ask", "hello"]).debug_screens)
+        self.assertEqual(parser.parse_args(["voice"]).command, "voice")
+
+    def test_voice_command_dispatches_without_opening_text_session_storage(self):
+        with patch("cli.app._run_voice", return_value=0) as run_voice:
+            with patch("cli.app.SessionStore") as store:
+                self.assertEqual(main(["voice"]), 0)
+        run_voice.assert_called_once_with()
+        store.assert_not_called()
 
     def test_debug_screens_flag_enables_private_screenshot_mode(self):
         with tempfile.TemporaryDirectory() as temp_dir:

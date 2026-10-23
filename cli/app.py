@@ -39,6 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     commands.add_parser("setup", help="configure Gemini and optional voice")
     commands.add_parser("doctor", help="check configuration and local capabilities")
+    commands.add_parser("voice", help="start the optional live voice assistant")
 
     config = commands.add_parser("config", help="inspect or change user configuration")
     config_commands = config.add_subparsers(dest="config_command", required=True)
@@ -88,6 +89,13 @@ def _read_prompt(prompt: str) -> str:
     except ImportError:
         return input(prompt)
     return prompt_toolkit_prompt(prompt)
+
+
+def _run_voice() -> int:
+    # Keep microphone and live-model imports out of every text-only command.
+    from cli.voice import run_voice
+
+    return run_voice()
 
 
 async def _interactive(store: SessionStore, session_id: str | None) -> int:
@@ -202,6 +210,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         from cli.doctor import run_doctor
 
         return run_doctor()
+    if args.command == "voice":
+        return _run_voice()
     if args.command == "config":
         from cli.config_commands import set_config_value, show_config
         from config.user_config import user_config_path
