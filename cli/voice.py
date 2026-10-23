@@ -9,6 +9,48 @@ from typing import Any
 
 from cli.client import TerminalClient
 
+VOICE_UNAVAILABLE = 3
+
+
+def _audio_unavailable_reason(
+    *,
+    audio_available: Callable[[], bool] | None = None,
+    devices_loader: Callable[[], Any] | None = None,
+) -> str | None:
+    """Check optional audio support without opening a microphone or speaker."""
+    if audio_available is None:
+        try:
+            audio_available = lambda: importlib.util.find_spec("sounddevice") is not None
+        except (ImportError, ValueError):
+            audio_available = lambda: False
+    try:
+        if not audio_available():
+            return "Voice support is not installed. Install the optional voice extra."
+    except Exception:
+        return "Voice support could not load its optional audio dependency."
+
+    try:
+        if devices_loader is None:
+            import sounddevice as sd
+
+            devices_loader = sd.query_devices
+        devices = devices_loader()
+    except Exception as exc:
+        return f"Voice audio devices are unavailable ({type(exc).__name__})."
+
+    try:
+        device_list = list(devices.values() if isinstance(devices, dict) else devices)
+        has_input = any(int(device.get("max_input_channels", 0)) > 0 for device in device_list)
+        has_output = any(int(device.get("max_output_channels", 0)) > 0 for device in device_list)
+    except (AttributeError, TypeError, ValueError):
+        return "Voice audio devices could not be inspected."
+    if not has_input or not has_output:
+        missing = "microphone" if not has_input else "speaker"
+        if not has_input and not has_output:
+            missing = "microphone and speaker"
+        return f"No usable {missing} is available for voice mode."
+    return None
+
 
 class VoiceTerminalClient(TerminalClient):
     """Render complete voice transcripts without a desktop subtitle widget."""
@@ -35,28 +77,26 @@ def run_voice(
     settings_loader: Callable[[], Any] | None = None,
     api_key_loader: Callable[[], str] | None = None,
     audio_available: Callable[[], bool] | None = None,
+    audio_devices_loader: Callable[[], Any] | None = None,
     async_runner: Callable[[Any], Any] = asyncio.run,
 ) -> int:
     """Run the existing Gemini Live engine without starting the desktop UI."""
     if live_factory is None:
-        audio_available = audio_available or (
-            lambda: importlib.util.find_spec("sounddevice") is not None
+        unavailable = _audio_unavailable_reason(
+            audio_available=audio_available,
+            devices_loader=audio_devices_loader,
         )
-        if not audio_available():
-            output(
-                "Voice mode needs the optional sounddevice audio dependency. "
-                "Until the voice extra is packaged, install `requirements-desktop.txt`."
-            )
-            return 2
+        if unavailable:
+            output(unavailable)
+            return VOICE_UNAVAILABLE
         try:
             from main import ArgusLive
         except ImportError as exc:
             output(
                 "Voice mode could not load its optional desktop dependencies "
-                f"({getattr(exc, 'name', None) or type(exc).__name__}). "
-                "Install `requirements-desktop.txt`, then run `argus voice` again."
+                f"({getattr(exc, 'name', None) or type(exc).__name__})."
             )
-            return 2
+            return VOICE_UNAVAILABLE
         live_factory = ArgusLive
 
     try:

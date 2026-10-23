@@ -93,9 +93,23 @@ def _read_prompt(prompt: str) -> str:
 
 def _run_voice() -> int:
     # Keep microphone and live-model imports out of every text-only command.
-    from cli.voice import run_voice
+    from cli.voice import VOICE_UNAVAILABLE, run_voice
 
-    return run_voice()
+    result = run_voice()
+    if result != VOICE_UNAVAILABLE:
+        return result
+
+    print("Voz indisponível; iniciando uma sessão de texto. Instale o extra [voice] para habilitar o áudio.")
+    try:
+        store = SessionStore()
+    except OSError as exc:
+        print(f"Could not open ARGUS session storage: {exc}", file=sys.stderr)
+        return 2
+    try:
+        return asyncio.run(_interactive(store, None))
+    except KeyboardInterrupt:
+        print("\nARGUS session saved.")
+        return 130
 
 
 def _default_voice_enabled() -> bool:

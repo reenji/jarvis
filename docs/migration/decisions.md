@@ -29,7 +29,8 @@ These decisions adapt the attached migration plan to reenji/jarvis and the owner
 - Keep the text CLI independent of audio libraries. Import the desktop live engine and audio runtime only after `argus voice` is selected or the saved `voice.enabled` preference selects voice as the default.
 - An explicit `argus chat` always starts text mode, including when voice is the saved default. The explicit `argus voice` command starts voice mode directly.
 - Reuse Gemini Live and its existing tool execution path through a terminal adapter; do not start the PyQt desktop UI. Show completed user and assistant transcripts in the terminal without printing partial transcription fragments as separate lines.
-- Voice mode uses the user's existing Gemini setup and saved voice name. Until Phase 6 defines a dedicated install extra, report the existing desktop requirements file when audio dependencies are unavailable.
+- Voice mode uses the user's existing Gemini setup and saved voice name; its audio dependencies remain optional and are packaged in Phase 6.
+- If the optional voice dependency or a usable microphone/speaker is unavailable, explain the limitation and continue in an interactive text session. Check device availability without opening audio streams. Provider configuration or network failures remain voice errors and do not silently switch modes.
 
 ## Configuration storage
 

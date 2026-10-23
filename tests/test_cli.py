@@ -67,6 +67,21 @@ class SessionStoreTests(unittest.TestCase):
         run_voice.assert_called_once_with()
         store.assert_not_called()
 
+    def test_explicit_voice_command_falls_back_to_text_when_audio_is_unavailable(self):
+        from cli.voice import VOICE_UNAVAILABLE
+
+        store = object()
+        with patch("cli.voice.run_voice", return_value=VOICE_UNAVAILABLE):
+            with patch("cli.app.SessionStore", return_value=store):
+                with patch("cli.app._interactive", new_callable=AsyncMock, return_value=0) as chat:
+                    with patch("builtins.print") as output:
+                        self.assertEqual(main(["voice"]), 0)
+
+        chat.assert_awaited_once_with(store, None)
+        output.assert_any_call(
+            "Voz indisponível; iniciando uma sessão de texto. Instale o extra [voice] para habilitar o áudio."
+        )
+
     def test_no_subcommand_uses_saved_voice_preference_but_chat_forces_text(self):
         with patch("cli.app._default_voice_enabled", return_value=True) as preference:
             with patch("cli.app._run_voice", return_value=0) as run_voice:
@@ -86,6 +101,18 @@ class SessionStoreTests(unittest.TestCase):
                     self.assertEqual(main(["chat"]), 0)
         preference.assert_not_called()
 
+    def test_saved_voice_default_falls_back_to_text_when_audio_is_unavailable(self):
+        from cli.voice import VOICE_UNAVAILABLE
+
+        store = object()
+        with patch("cli.app._default_voice_enabled", return_value=True):
+            with patch("cli.voice.run_voice", return_value=VOICE_UNAVAILABLE):
+                with patch("cli.app.SessionStore", return_value=store):
+                    with patch("cli.app._interactive", new_callable=AsyncMock, return_value=0) as chat:
+                        self.assertEqual(main([]), 0)
+
+        chat.assert_awaited_once_with(store, None)
+
     def test_voice_terminal_client_prints_complete_transcripts_and_system_logs(self):
         from cli.voice import VoiceTerminalClient
 
@@ -102,13 +129,28 @@ class SessionStoreTests(unittest.TestCase):
         )
 
     def test_voice_mode_explains_optional_audio_dependency_without_importing_desktop_app(self):
-        from cli.voice import run_voice
+        from cli.voice import VOICE_UNAVAILABLE, run_voice
 
         output = []
         with patch("cli.voice.importlib.util.find_spec", return_value=None):
             result = run_voice(output=output.append, audio_available=lambda: False)
-        self.assertEqual(result, 2)
-        self.assertTrue(any("requirements-desktop.txt" in line for line in output))
+        self.assertEqual(result, VOICE_UNAVAILABLE)
+        self.assertTrue(any("optional voice extra" in line for line in output))
+
+    def test_voice_mode_falls_back_when_no_microphone_or_speaker_is_available(self):
+        from cli.voice import VOICE_UNAVAILABLE, run_voice
+
+        output = []
+        result = run_voice(
+            output=output.append,
+            audio_available=lambda: True,
+            audio_devices_loader=lambda: [
+                {"max_input_channels": 0, "max_output_channels": 0}
+            ],
+        )
+
+        self.assertEqual(result, VOICE_UNAVAILABLE)
+        self.assertTrue(any("microphone and speaker" in line for line in output))
 
     def test_voice_mode_uses_saved_settings_and_closes_cleanly_on_interrupt(self):
         from cli.voice import VoiceTerminalClient, run_voice
