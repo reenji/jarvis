@@ -67,6 +67,8 @@ jobs:
           sudo apt-get install --yes libegl1 libportaudio2 xvfb
       - name: Install project and full-suite dependencies
         run: pip install -e ".[voice]" -r requirements-dev.txt
+      - name: Verify interactive CLI test dependencies
+        run: python -c "from prompt_toolkit.completion import CompleteEvent; from prompt_toolkit.history import FileHistory; from rich.console import Console"
       - name: Prepare isolated QA workspace
         env:
           ARGUS_QA_WORKSPACE: ${{ runner.temp }}/argus-qa
