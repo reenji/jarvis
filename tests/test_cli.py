@@ -102,13 +102,28 @@ class SessionStoreTests(unittest.TestCase):
         )
 
     def test_voice_mode_explains_optional_audio_dependency_without_importing_desktop_app(self):
-        from cli.voice import run_voice
+        from cli.voice import VOICE_UNAVAILABLE, run_voice
 
         output = []
         with patch("cli.voice.importlib.util.find_spec", return_value=None):
             result = run_voice(output=output.append, audio_available=lambda: False)
-        self.assertEqual(result, 2)
-        self.assertTrue(any("requirements-desktop.txt" in line for line in output))
+        self.assertEqual(result, VOICE_UNAVAILABLE)
+        self.assertTrue(any("optional voice extra" in line for line in output))
+
+    def test_voice_mode_falls_back_when_no_microphone_or_speaker_is_available(self):
+        from cli.voice import VOICE_UNAVAILABLE, run_voice
+
+        output = []
+        result = run_voice(
+            output=output.append,
+            audio_available=lambda: True,
+            audio_devices_loader=lambda: [
+                {"max_input_channels": 0, "max_output_channels": 0}
+            ],
+        )
+
+        self.assertEqual(result, VOICE_UNAVAILABLE)
+        self.assertTrue(any("microphone and speaker" in line for line in output))
 
     def test_voice_mode_uses_saved_settings_and_closes_cleanly_on_interrupt(self):
         from cli.voice import VoiceTerminalClient, run_voice
