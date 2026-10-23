@@ -56,6 +56,7 @@ jobs:
           python-version: "3.12"
           cache: pip
           cache-dependency-path: |
+            pyproject.toml
             requirements.txt
             requirements-desktop.txt
             requirements-api.txt
@@ -64,7 +65,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --yes libegl1 libportaudio2 xvfb
-      - run: pip install -r requirements-dev.txt
+      - name: Install project and full-suite dependencies
+        run: pip install -e ".[voice]" -r requirements-dev.txt
       - name: Prepare isolated QA workspace
         env:
           ARGUS_QA_WORKSPACE: ${{ runner.temp }}/argus-qa
