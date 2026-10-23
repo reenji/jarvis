@@ -18,6 +18,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--version", action="version", version="ARGUS CLI 0.1.0")
     parser.add_argument(
+        "-q",
+        "--question",
+        dest="quick_question",
+        metavar="TEXT",
+        help="send one prompt without entering the interactive session",
+    )
+    parser.add_argument(
+        "--continue",
+        dest="continue_session",
+        action="store_true",
+        help="resume the most recently used session",
+    )
+    parser.add_argument(
         "--debug-screens",
         action="store_true",
         help="save screen-control captures under the per-user Argus debug directory",
@@ -218,7 +231,12 @@ async def _ask_once(store: SessionStore, prompt: str, session_id: str | None) ->
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    if args.command is not None and (args.quick_question is not None or args.continue_session):
+        parser.error("-q/--question and --continue cannot be combined with a subcommand")
+    if args.quick_question is not None and not args.quick_question.strip():
+        parser.error("-q/--question requires non-empty text")
     if args.debug_screens:
         os.environ["ARGUS_DEBUG_SCREENSHOTS"] = "true"
 
@@ -232,7 +250,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_doctor()
     if args.command == "voice":
         return _run_voice()
-    if args.command is None:
+    if args.command is None and args.quick_question is None and not args.continue_session:
         try:
             if _default_voice_enabled():
                 return _run_voice()
@@ -255,6 +273,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     except OSError as exc:
         print(f"Could not open ARGUS session storage: {exc}", file=sys.stderr)
         return 2
+
+    if args.quick_question is not None:
+        latest = store.list(limit=1) if args.continue_session else []
+        session_id = latest[0].id if latest else None
+        return asyncio.run(_ask_once(store, args.quick_question.strip(), session_id))
+    if args.continue_session:
+        latest = store.list(limit=1)
+        session_id = latest[0].id if latest else None
+        return asyncio.run(_interactive(store, session_id))
 
     if args.command == "sessions":
         _show_sessions(store, limit=args.limit)

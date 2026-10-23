@@ -56,9 +56,38 @@ class SessionStoreTests(unittest.TestCase):
         parser = build_parser()
         self.assertEqual(parser.parse_args(["ask", "hello", "Argus"]).prompt, ["hello", "Argus"])
         self.assertEqual(parser.parse_args(["chat", "--resume", "abc"]).session, "abc")
+        self.assertEqual(parser.parse_args(["-q", "hello"]).quick_question, "hello")
+        self.assertTrue(parser.parse_args(["--continue"]).continue_session)
         self.assertEqual(parser.parse_args(["sessions", "--limit", "5"]).limit, 5)
         self.assertTrue(parser.parse_args(["--debug-screens", "ask", "hello"]).debug_screens)
         self.assertEqual(parser.parse_args(["voice"]).command, "voice")
+
+    def test_quick_question_can_append_to_the_most_recent_session(self):
+        store = Mock()
+        store.list.return_value = [SimpleNamespace(id="latest-session")]
+        with patch("cli.app.SessionStore", return_value=store):
+            with patch("cli.app._ask_once", new_callable=AsyncMock, return_value=0) as ask:
+                self.assertEqual(main(["-q", "  play music  ", "--continue"]), 0)
+        ask.assert_awaited_once_with(store, "play music", "latest-session")
+
+    def test_continue_resumes_the_most_recent_session_or_starts_a_new_one(self):
+        store = Mock()
+        store.list.side_effect = [
+            [SimpleNamespace(id="latest-session")],
+            [],
+        ]
+        with patch("cli.app.SessionStore", return_value=store):
+            with patch("cli.app._interactive", new_callable=AsyncMock, return_value=0) as chat:
+                self.assertEqual(main(["--continue"]), 0)
+                self.assertEqual(main(["--continue"]), 0)
+        self.assertEqual(
+            [call.args for call in chat.await_args_list],
+            [(store, "latest-session"), (store, None)],
+        )
+
+    def test_quick_question_flags_cannot_be_combined_with_subcommands(self):
+        with self.assertRaises(SystemExit):
+            main(["-q", "hello", "chat"])
 
     def test_voice_command_dispatches_without_opening_text_session_storage(self):
         with patch("cli.app._run_voice", return_value=0) as run_voice:
