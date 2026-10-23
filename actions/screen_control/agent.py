@@ -25,6 +25,7 @@ from actions.screen_control.safety import (
 from actions.screen_control.schemas import ActionType, ScreenAction
 from actions.screen_control.vision import decide_next_action, describe_screen
 from actions.screen_control.window import bring_to_front
+from config.paths import default_argus_data_dir
 
 
 _APP_TARGETS = (
@@ -402,7 +403,7 @@ class ScreenAgent:
             return
         try:
             from PIL import Image, ImageDraw
-            root = Path(__file__).resolve().parents[2] / "logs" / "screen" / run_id
+            root = default_argus_data_dir() / "debug" / "screens" / run_id
             root.mkdir(parents=True, exist_ok=True)
             image = Image.open(__import__("io").BytesIO(capture.image_bytes)).convert("RGB")
             if action.x is not None and action.y is not None:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import os
 import sys
 from collections.abc import Sequence
 
@@ -16,6 +17,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="ARGUS text assistant. Start an interactive session or ask one question.",
     )
     parser.add_argument("--version", action="version", version="ARGUS CLI 0.1.0")
+    parser.add_argument(
+        "--debug-screens",
+        action="store_true",
+        help="save screen-control captures under the per-user Argus debug directory",
+    )
     commands = parser.add_subparsers(dest="command")
 
     ask = commands.add_parser("ask", help="send one prompt and print the response")
@@ -185,6 +191,8 @@ async def _ask_once(store: SessionStore, prompt: str, session_id: str | None) ->
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.debug_screens:
+        os.environ["ARGUS_DEBUG_SCREENSHOTS"] = "true"
 
     if args.command == "setup":
         from cli.setup import run_setup

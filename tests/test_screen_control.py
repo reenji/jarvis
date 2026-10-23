@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -93,6 +94,26 @@ def test_focus_delay_is_configurable_and_bounded_by_environment():
         assert ScreenConfig.from_env().focus_delay == 10
     with patch.dict("os.environ", {"ARGUS_SCREEN_FOCUS_DELAY": "invalid"}):
         assert ScreenConfig.from_env().focus_delay == ScreenConfig.focus_delay
+
+
+def test_debug_screenshots_are_opt_in_and_saved_in_user_debug_directory():
+    from PIL import Image
+
+    image = Image.new("RGB", (2, 2), color="white")
+    output = BytesIO()
+    image.save(output, format="PNG")
+    capture = _capture()
+    capture = Capture(
+        output.getvalue(), capture.image_width, capture.image_height,
+        capture.source_width, capture.source_height, capture.origin_x,
+        capture.origin_y, capture.scale, capture.timestamp, capture.window,
+    )
+    agent = ScreenAgent(config=ScreenConfig(debug_screenshots=True), abort_controller=_NoopAbort())
+    with tempfile.TemporaryDirectory() as temp_dir:
+        root = Path(temp_dir) / "argus"
+        with patch("actions.screen_control.agent.default_argus_data_dir", return_value=root):
+            agent._write_step_debug("run-123", 1, capture, ScreenAction(ActionType.CLICK, x=500, y=500))
+        assert (root / "debug" / "screens" / "run-123" / "step-01.png").is_file()
 
 
 def test_active_terminal_window_fails_closed_before_capture():
