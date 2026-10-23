@@ -18,6 +18,7 @@ from typing import Callable
 from PyQt6.QtCore import QRectF, Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QColor, QPainter, QPainterPath, QPen
 from PyQt6.QtWidgets import QLabel, QPushButton, QWidget
+from ui.theme.tokens import TOKENS
 
 
 INTRO_SEQUENCE_VERSION = 5
@@ -445,7 +446,7 @@ class FirstRunIntroOverlay(QWidget):
         if colors is not None:
             self._skip_button.setStyleSheet(f"""
                 QPushButton {{ background: {colors.BG}; color: {colors.PRI};
-                    border: 1px solid {colors.PRI_DIM}; border-radius: 5px; padding: 0 14px; }}
+                    border: 1px solid {colors.PRI_DIM}; border-radius: {TOKENS.radii['control']}px; padding: 0 14px; }}
                 QPushButton:hover {{ background: {colors.PRI_GHO}; border-color: {colors.PRI}; }}
                 QPushButton:focus {{ border: 2px solid {colors.PRI}; }}
             """)
