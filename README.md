@@ -2,6 +2,8 @@
 
 Local Gemini Live desktop assistant with a PyQt6 interface, voice interaction, detachable panels, and optional browser, file, screen, and messaging tools.
 
+ARGUS is the product name; its source repository is [`reenji/jarvis`](https://github.com/reenji/jarvis).
+
 ARGUS also includes a dedicated presentation studio that creates, edits,
 redesigns, and extends editable widescreen `.pptx` decks from documents, data,
 images, audio, and video, with optional PDF export. See the
