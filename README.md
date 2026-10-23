@@ -51,9 +51,9 @@ Direct mouse and keyboard control is enabled by default so ARGUS can complete
 requested tasks without asking for approval for each click or keystroke. You can
 disable it in **Settings → Actions**. Read the [computer-control terms](docs/TERMS.md).
 
-O ARGUS pode abrir aplicativos pelo nome e executar tarefas visuais neles. Em
-pedidos com vários passos, ele abre ou foca o aplicativo, interage com seus
-controles e verifica o resultado; veja a [comparação com OpenJarvis](docs/OPENJARVIS_COMPARISON.md).
+ARGUS can open applications by name and perform visual tasks in them. For
+multi-step requests, it opens or focuses the app, interacts with its controls,
+and checks the result; see the [OpenJarvis comparison](docs/OPENJARVIS_COMPARISON.md).
 
 ## Local document knowledge
 
