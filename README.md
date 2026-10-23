@@ -156,6 +156,29 @@ Open a new terminal (or reload your shell profile), then start ARGUS with:
 argus
 ```
 
+The interactive command opens a terminal dashboard with the current session,
+model, workspace, and available actions. Its theme and display names are saved
+in the current operating system user's Argus configuration, so each computer
+account can keep its own terminal identity and colors. Change them in-session:
+
+```text
+/theme cyan                 # cyan, amber, matrix, or mono
+/profile assistant "My Argus"
+/profile user "My Name"
+```
+
+The same preferences can be set without opening a chat:
+
+```bash
+argus config set terminal.theme cyan
+argus config set terminal.assistant_name "My Argus"
+argus config set terminal.user_name "My Name"
+```
+
+Use `/status` to inspect the current session, `/tools` to list the available
+actions, and `/help` to see the remaining commands. Run `argus --no-banner` to
+start a compact session without the dashboard.
+
 Before packaging or releasing the desktop app, run the side-effect-safe
 capability audit:
 
