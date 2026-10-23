@@ -247,6 +247,7 @@ class TextConversation:
                 ctx=self._tool_context,
                 args=args,
             )
+            self.terminal.write_log(f"SYS: Finished {name}.")
             return result if isinstance(result, dict) else {"result": str(result)}
         except Exception as exc:
             self.terminal.write_log(f"ERR: {name} — {str(exc)[:180]}")
