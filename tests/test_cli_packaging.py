@@ -50,6 +50,17 @@ class CliPackagingMetadataTests(unittest.TestCase):
     def test_live_prompt_is_included_in_the_wheel(self):
         self.assertIn("prompt.txt", self.project_package_data("core"))
 
+    def test_installers_cover_supported_shells_and_keep_voice_opt_in(self):
+        bash = (ROOT / "scripts" / "install.sh").read_text(encoding="utf-8")
+        powershell = (ROOT / "scripts" / "install.ps1").read_text(encoding="utf-8")
+        for installer in (bash, powershell):
+            self.assertIn("git+https://github.com/reenji/jarvis.git", installer)
+            self.assertIn("[voice]", installer)
+            self.assertIn("argus setup", installer)
+        self.assertIn("uv", bash)
+        self.assertIn("pipx", bash)
+        self.assertIn("[switch]$Voice", powershell)
+
     @staticmethod
     def project_package_data(package: str) -> list[str]:
         data = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
