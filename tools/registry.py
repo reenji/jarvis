@@ -7,9 +7,10 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Dict, Optional
 
 import config.settings as settings_mod
+from core.argus_client import ArgusClient
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, init=False)
 class ToolContext:
     """Minimal context exposed to tools.
 
@@ -17,9 +18,34 @@ class ToolContext:
     happen via explicitly passed callbacks (e.g. speak).
     """
 
-    ui: Any
+    client: ArgusClient
     speak: Callable[[str], bool]
     speak_vision_result: Callable[[str], bool]
+
+    def __init__(
+        self,
+        client: ArgusClient | None = None,
+        speak: Callable[[str], bool] | None = None,
+        speak_vision_result: Callable[[str], bool] | None = None,
+        *,
+        ui: ArgusClient | None = None,
+    ) -> None:
+        """Accept the old ``ui=`` keyword while tools migrate to ``client``."""
+        if client is not None and ui is not None:
+            raise ValueError("Pass either client or ui, not both")
+        adapter = client if client is not None else ui
+        if adapter is None:
+            raise ValueError("ToolContext requires a client")
+        if speak is None or speak_vision_result is None:
+            raise ValueError("ToolContext requires speak callbacks")
+        object.__setattr__(self, "client", adapter)
+        object.__setattr__(self, "speak", speak)
+        object.__setattr__(self, "speak_vision_result", speak_vision_result)
+
+    @property
+    def ui(self) -> ArgusClient:
+        """Compatibility alias for plugins using the previous context shape."""
+        return self.client
 
 
 ExecuteFn = Callable[[ToolContext, dict[str, Any]], Awaitable[dict[str, Any]]]

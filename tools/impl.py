@@ -55,7 +55,10 @@ async def execute(ctx: Any, name: str, args: dict[str, Any]) -> dict[str, Any]:
 
     if name == "graphics_quality":
         quality = (args.get("quality") or "").strip().lower()
-        ctx.ui.set_graphics_quality(quality)
+        set_quality = getattr(ctx.client, "set_graphics_quality", None)
+        if not callable(set_quality):
+            return {"result": "Graphics quality controls are unavailable for this client."}
+        set_quality(quality)
         return {"result": f"ARGUS graphics quality changed to {quality}."}
 
     if name == "argus_ui_control":
@@ -65,15 +68,24 @@ async def execute(ctx: Any, name: str, args: dict[str, Any]) -> dict[str, Any]:
             allowed = {"arc_reactor", "stealth_red", "vibranium_purple", "nanotech_gold", "platinum"}
             if theme not in allowed:
                 raise ValueError(f"Unknown ARGUS theme: {theme or 'missing'}")
-            ctx.ui.set_theme(theme)
+            set_theme = getattr(ctx.client, "set_theme", None)
+            if not callable(set_theme):
+                return {"result": "Theme controls are unavailable for this client."}
+            set_theme(theme)
             return {"result": f"ARGUS theme changed to {theme.replace('_', ' ')}."}
         if action == "change_graphics_quality":
             quality = str(args.get("graphics_quality") or "").strip().lower()
             if quality not in {"low", "medium", "high"}:
                 raise ValueError(f"Unknown graphics quality: {quality or 'missing'}")
-            ctx.ui.set_graphics_quality(quality)
+            set_quality = getattr(ctx.client, "set_graphics_quality", None)
+            if not callable(set_quality):
+                return {"result": "Graphics quality controls are unavailable for this client."}
+            set_quality(quality)
             return {"result": f"ARGUS graphics quality changed to {quality}."}
-        ctx.ui.handle_ui_command(action)
+        handle_command = getattr(ctx.client, "handle_ui_command", None)
+        if not callable(handle_command):
+            return {"result": "Interface controls are unavailable for this client."}
+        handle_command(action)
         return {"result": f"ARGUS interface action completed: {action.replace('_', ' ')}."}
 
     if name == "save_memory":
@@ -85,73 +97,73 @@ async def execute(ctx: Any, name: str, args: dict[str, Any]) -> dict[str, Any]:
         value = args.get("value", "")
         if key and value:
             update_memory({category: {key: {"value": value}}})
-        if not getattr(ctx.ui, "muted", False):
-            ctx.ui.set_state("LISTENING")
+        if not getattr(ctx.client, "muted", False):
+            ctx.client.set_state("LISTENING")
         return {"result": "ok", "silent": True}
 
     # General mappings: call the action functions.
     # These calls should mirror main.py's branches as closely as possible.
     if name == "open_app":
         from actions.open_app import open_app
-        r = open_app(parameters=args, response=None, player=ctx.ui)
+        r = open_app(parameters=args, response=None, player=ctx.client)
         return {"result": r or f"Opened {args.get('app_name')}."}
 
     if name == "weather_report":
         from actions.weather_report import weather_action
-        r = weather_action(parameters=args, player=ctx.ui)
+        r = weather_action(parameters=args, player=ctx.client)
         return {"result": r or "Weather delivered."}
 
     if name == "browser_control":
         from actions.browser_control import browser_control
-        r = browser_control(parameters=args, player=ctx.ui)
+        r = browser_control(parameters=args, player=ctx.client)
         return {"result": r or "Done."}
 
     if name == "file_controller":
         from actions.file_controller import file_controller
         if (str(args.get("action") or "").lower() == "open" and not args.get("path") and not args.get("name")):
-            cur = getattr(ctx.ui, "current_file", None)
+            cur = getattr(ctx.client, "current_file", None)
             if cur:
                 args["path"] = cur
-        r = file_controller(parameters=args, player=ctx.ui)
+        r = file_controller(parameters=args, player=ctx.client)
         return {"result": r or "Done."}
 
     if name == "check_messages":
         from actions.message_monitor import check_messages
-        r = check_messages(parameters=args, response=None, player=ctx.ui, session_memory=None)
+        r = check_messages(parameters=args, response=None, player=ctx.client, session_memory=None)
         return {"result": r or "No readable messages were found."}
 
     if name == "prepare_message_reply":
         from actions.send_message import prepare_message_reply
-        r = prepare_message_reply(parameters=args, response=None, player=ctx.ui, session_memory=None)
+        r = prepare_message_reply(parameters=args, response=None, player=ctx.client, session_memory=None)
         return {"result": r or "The message draft could not be prepared."}
 
     if name == "send_message":
         from actions.send_message import send_message
-        r = send_message(parameters=args, response=None, player=ctx.ui, session_memory=None)
+        r = send_message(parameters=args, response=None, player=ctx.client, session_memory=None)
         return {"result": r or f"Message sent to {args.get('receiver')}."}
 
     if name == "email_control":
         from actions.email_control import email_control
         if str(args.get("action") or "").lower() == "connect" and not args.get("credentials_path"):
-            cur = getattr(ctx.ui, "current_file", None)
+            cur = getattr(ctx.client, "current_file", None)
             if cur and str(cur).lower().endswith(".json"):
                 args["credentials_path"] = cur
-        r = email_control(parameters=args, response=None, player=ctx.ui, session_memory=None)
+        r = email_control(parameters=args, response=None, player=ctx.client, session_memory=None)
         return {"result": r or "Email action completed."}
 
     if name == "reminder":
         from actions.reminder import reminder
-        r = reminder(parameters=args, response=None, player=ctx.ui)
+        r = reminder(parameters=args, response=None, player=ctx.client)
         return {"result": r or "Reminder set."}
 
     if name == "youtube_video":
         from actions.youtube_video import youtube_video
-        r = youtube_video(parameters=args, response=None, player=ctx.ui)
+        r = youtube_video(parameters=args, response=None, player=ctx.client)
         return {"result": r or "Done."}
 
     if name == "media_control":
         from actions.media_control import media_control
-        r = media_control(parameters=args, response=None, player=ctx.ui)
+        r = media_control(parameters=args, response=None, player=ctx.client)
         return {"result": r or "Done."}
 
     if name == "screen_process":
@@ -163,7 +175,7 @@ async def execute(ctx: Any, name: str, args: dict[str, Any]) -> dict[str, Any]:
             kwargs={
                 "parameters": args,
                 "response": None,
-                "player": ctx.ui,
+                "player": ctx.client,
                 "session_memory": None,
                 "speak": ctx.speak_vision_result,
             },
@@ -173,22 +185,22 @@ async def execute(ctx: Any, name: str, args: dict[str, Any]) -> dict[str, Any]:
 
     if name == "computer_settings":
         from actions.computer_settings import computer_settings
-        r = computer_settings(parameters=args, response=None, player=ctx.ui)
+        r = computer_settings(parameters=args, response=None, player=ctx.client)
         return {"result": r or "Done."}
 
     if name == "desktop_control":
         from actions.desktop import desktop_control
-        r = desktop_control(parameters=args, player=ctx.ui)
+        r = desktop_control(parameters=args, player=ctx.client)
         return {"result": r or "Done."}
 
     if name == "code_helper":
         from actions.code_helper import code_helper
-        r = code_helper(parameters=args, player=ctx.ui, speak=ctx.speak)
+        r = code_helper(parameters=args, player=ctx.client, speak=ctx.speak)
         return {"result": r or "Done."}
 
     if name == "dev_agent":
         from actions.dev_agent import dev_agent
-        r = dev_agent(parameters=args, player=ctx.ui, speak=ctx.speak)
+        r = dev_agent(parameters=args, player=ctx.client, speak=ctx.speak)
         return {"result": r or "Done."}
 
     if name == "agent_task":
@@ -200,35 +212,36 @@ async def execute(ctx: Any, name: str, args: dict[str, Any]) -> dict[str, Any]:
 
     if name == "web_search":
         from actions.web_search import web_search
-        r = web_search(parameters=args, player=ctx.ui)
+        r = web_search(parameters=args, player=ctx.client)
         return {"result": r or "Done."}
 
     if name == "file_processor":
         from actions.file_processor import file_processor
-        if not args.get("file_path") and getattr(ctx.ui, "current_file", None):
-            args["file_path"] = ctx.ui.current_file
-        r = file_processor(parameters=args, player=ctx.ui, speak=ctx.speak)
+        current_file = getattr(ctx.client, "current_file", None)
+        if not args.get("file_path") and current_file:
+            args["file_path"] = current_file
+        r = file_processor(parameters=args, player=ctx.client, speak=ctx.speak)
         return {"result": r or "Done."}
 
     if name == "computer_control":
         from actions.computer_control import computer_control
-        r = computer_control(parameters=args, player=ctx.ui)
+        r = computer_control(parameters=args, player=ctx.client)
         return {"result": r or "Done."}
 
     if name == "game_updater":
         from actions.game_updater import game_updater
-        r = game_updater(parameters=args, player=ctx.ui, speak=ctx.speak)
+        r = game_updater(parameters=args, player=ctx.client, speak=ctx.speak)
         return {"result": r or "Done."}
 
     if name == "flight_finder":
         from actions.flight_finder import flight_finder
-        r = flight_finder(parameters=args, player=ctx.ui)
+        r = flight_finder(parameters=args, player=ctx.client)
         return {"result": r or "Done."}
 
     if name == "create_presentation":
         from actions.presentation_maker import request_presentation
         from pathlib import Path
-        current_file = getattr(ctx.ui, "current_file", None)
+        current_file = getattr(ctx.client, "current_file", None)
         supported_sources = {
             ".txt", ".md", ".rst", ".csv", ".json", ".jsonl", ".docx", ".pptx",
             ".pdf", ".xlsx", ".xls", ".png", ".jpg", ".jpeg", ".webp",
@@ -241,7 +254,7 @@ async def execute(ctx: Any, name: str, args: dict[str, Any]) -> dict[str, Any]:
             and Path(str(current_file)).suffix.lower() in supported_sources
         ):
             args["source_files"] = [current_file]
-        r = request_presentation(parameters=args, player=ctx.ui, speak=ctx.speak)
+        r = request_presentation(parameters=args, player=ctx.client, speak=ctx.speak)
         return {"result": r or "Presentation preference requested."}
 
     if name == "task_status":
