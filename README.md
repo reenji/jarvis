@@ -2,6 +2,8 @@
 
 Local Gemini Live desktop assistant with a PyQt6 interface, voice interaction, detachable panels, and optional browser, file, screen, and messaging tools.
 
+ARGUS is the product name; its source repository is [`reenji/jarvis`](https://github.com/reenji/jarvis).
+
 ARGUS also includes a dedicated presentation studio that creates, edits,
 redesigns, and extends editable widescreen `.pptx` decks from documents, data,
 images, audio, and video, with optional PDF export. See the
@@ -26,8 +28,8 @@ QA environment.
 In Terminal, run:
 
 ```bash
-git clone https://github.com/anonymandk/argus.git
-cd argus
+git clone https://github.com/reenji/jarvis.git
+cd jarvis
 python scripts/setup_argus.py
 ```
 
