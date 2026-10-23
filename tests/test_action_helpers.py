@@ -103,6 +103,23 @@ class ActionHelperTests(unittest.TestCase):
         play_item.assert_called_once_with("spotify:track:abc123")
         select.assert_not_called()
 
+    def test_spotify_direct_link_failure_does_not_fall_back_to_search_selection(self):
+        failure = "Spotify opened, but playback verification failed."
+        with (
+            patch.object(media_control, "_SYSTEM", "Windows"),
+            patch.object(media_control, "_open_uri", return_value=(True, "")),
+            patch.object(media_control, "_play_spotify_opened_item", return_value=failure),
+            patch.object(media_control, "_select_spotify_search_result") as select,
+        ):
+            result = media_control.media_control({
+                "action": "play_query",
+                "platform": "spotify",
+                "query": "https://open.spotify.com/track/abc123",
+            })
+
+        self.assertEqual(result, failure)
+        select.assert_not_called()
+
     def test_successful_macos_direct_launch_has_no_artificial_post_wait(self):
         completed = MagicMock(returncode=0)
         with (
