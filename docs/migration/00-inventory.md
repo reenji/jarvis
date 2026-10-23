@@ -54,3 +54,28 @@ core/argus_client.py already defines a transport-neutral ArgusClient Protocol, a
 ### Confirmation-policy mismatch to resolve in implementation
 
 core/tool_approval.py and main.py currently implement turn-bound approvals for some high-impact tools and drafts. That behavior does not match the owner's instruction that a direct user request authorizes completion. For this migration, preserve only a sensitive-file-share confirmation and genuine clarification of an ambiguous target; do not add general ask/safe/never prompts or a confirmation before each mouse, keyboard, or message action.
+
+## Packaging, tests, CI, documentation, and platform support
+
+### Packaging and installation
+
+- pyproject.toml uses setuptools and exposes the argus command, but package discovery currently includes ui and project metadata describes a desktop assistant.
+- requirements.txt aggregates requirements-desktop.txt and requirements-api.txt. The desktop profile includes PyQt6, sounddevice, PyAutoGUI, screen capture, browser, file, presentation, and optional TTS libraries. The API profile still includes sounddevice and the legacy Gemini SDK because current import paths need them.
+- ARGUS.spec and ARGUS-Debug.spec are PyInstaller desktop builds; both package assets/fonts, and the release build includes UI hidden imports.
+- scripts/create_locked_dmg.sh builds a macOS desktop image. setup_argus.py, setup_argus.bat, setup_argus.sh, start_argus.bat, start_argus.sh, and start_argus.command install or launch from a local clone and .venv.
+- scripts/install_argus_cli.sh only links scripts/argus into a user bin directory; it does not install an independent CLI package.
+- Docker, docker-compose.yml, alembic/, Fly/Render manifests, and the manual deployment workflow belong to the hosted API/web service and should remain.
+
+### Tests and continuous integration
+
+- tests/ contains Python tests for actions, API, providers, tool contracts, screen control, security, and desktop UI. Some suites import PyQt or platform-specific libraries.
+- .github/workflows/ci.yml has an Ubuntu backend job with Postgres and Redis, Xvfb, and the complete Python pytest suite, plus an Ubuntu Node job for web install, typecheck, lint, and build.
+- The CI workflow has no Windows/macOS runner matrix and does not build/install a wheel. A Linux-green run is not proof of real Windows/macOS screen control, audio permissions, or package installation.
+- docs/QA.md separates safe automated checks from supervised hardware and desktop checks. Real mouse/keyboard/audio should stay mocked in normal CI; owner verification remains necessary for live desktop permissions, audio, and a clean-machine install.
+
+### Platform and documentation claims
+
+- README.md claims Windows, macOS, and Linux support for the local product. actions/open_app.py contains platform-specific application aliases; advanced window focus and accessibility code currently includes Windows APIs.
+- The current CI only runs backend and frontend on Ubuntu. The platform support matrix must be measured per capability, not inferred from the README claim.
+- Relevant documentation includes README.md, docs/USAGE.md, docs/TERMS.md, docs/QA.md, docs/ARCHITECTURE.md, docs/TUTORIAL.md, docs/OPENJARVIS_COMPARISON.md, and docs/ui/.
+- Some existing docs are stale snapshots: docs/ARCHITECTURE.md describes a historical ui.py layout while the current code is a ui/ package; README.md still shows an old anonymandk/argus clone URL. Migration docs should update those references without changing hosted API/web deployment instructions.
