@@ -315,6 +315,48 @@ def test_screen_agent_stops_repeating_an_unchanged_click():
     assert result.steps_taken == 3
 
 
+def test_screen_agent_stops_after_configured_action_limit():
+    capture = _capture()
+    agent = ScreenAgent(
+        config=ScreenConfig(max_steps=1, max_seconds=10, settle_delay=0.1),
+        abort_controller=_NoopAbort(),
+    )
+    click = ScreenAction(ActionType.CLICK, target_description="Abrir resultado", x=300, y=400)
+    with (
+        patch("actions.screen_control.agent.capture_active_window", return_value=capture) as capture_window,
+        patch("actions.screen_control.agent.describe_controls", return_value=[]),
+        patch("actions.screen_control.agent.decide_next_action", return_value=click),
+        patch("actions.screen_control.agent.execute", return_value=ActionResult(True, "clicked", 0.01)) as execute,
+        patch("actions.screen_control.agent.time.sleep"),
+    ):
+        result = agent.run("Abra o resultado solicitado")
+    assert result.status == "fail"
+    assert "limite de 1 ações" in result.summary
+    assert result.steps_taken == 1
+    assert capture_window.call_count == 2
+    execute.assert_called_once()
+
+
+def test_screen_agent_checks_time_limit_before_capturing_or_acting():
+    agent = ScreenAgent(
+        config=ScreenConfig(max_steps=4, max_seconds=5),
+        abort_controller=_NoopAbort(),
+    )
+    with (
+        patch("actions.screen_control.agent.time.monotonic", side_effect=[100.0, 106.0]),
+        patch("actions.screen_control.agent.capture_active_window") as capture_window,
+        patch("actions.screen_control.agent.decide_next_action") as decide,
+        patch("actions.screen_control.agent.execute") as execute,
+    ):
+        result = agent.run("Abra o resultado solicitado")
+    assert result.status == "fail"
+    assert "limite de tempo" in result.summary
+    assert result.steps_taken == 0
+    capture_window.assert_not_called()
+    decide.assert_not_called()
+    execute.assert_not_called()
+
+
 def test_sensitive_file_share_is_held_before_any_action():
     capture = _capture()
     agent = ScreenAgent(

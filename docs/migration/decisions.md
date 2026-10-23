@@ -15,6 +15,15 @@ These decisions adapt the attached migration plan to reenji/jarvis and the owner
 - Keep the anti-bot rule: stop automation when a verification challenge appears; do not solve or bypass it.
 - Do not persist screenshots by default. Any diagnostic screenshot saving must be explicit and local.
 
+### Phase 4: screen control
+
+- Screen focus, active-window metadata, and screen control use the existing Win32 backend. `argus doctor` reports this capability as unavailable on non-Windows systems rather than treating a readable pointer position as proof that the full flow works. App launching and text-only CLI use remain independent.
+- Bound each visual run by action and elapsed-time limits. Keep the emergency stop hotkey active and protect the ARGUS terminal from becoming a screen-control target.
+- Apply a short configurable wait after focusing or launching an app so its window can settle before the first capture.
+- A direct user order is sufficient for ordinary UI actions. Ask only before sharing a file identified as credentials, environment configuration, Docker configuration, or another sensitive artifact. Opening such a file is not itself a share request.
+- When an anti-bot challenge appears, stop before interacting. The CLI can wait for the user to resolve it manually and resume the original task once; a challenge that remains visible ends the run.
+- Diagnostic screen images stay disabled by default. When explicitly enabled with `--debug-screens` or `ARGUS_DEBUG_SCREENSHOTS`, store them under the per-user ARGUS debug directory, separated by run ID.
+
 ## Configuration storage
 
 - Store the user config next to the CLI's per-user state database, using the OS-specific directory already selected by `ARGUS_HOME` and the session store. This keeps config, session state, and their access controls together; `ARGUS_CONFIG_FILE` can select a different config file.
