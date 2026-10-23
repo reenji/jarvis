@@ -170,48 +170,65 @@ class DeepResearchTests(unittest.TestCase):
         player.show_research_progress.assert_not_called()
         self.assertIn("controlled browser", message)
 
-    def test_visible_research_searches_and_opens_a_source_tab(self):
-        results = [{
+    def test_visible_research_opens_a_grounded_source_without_searching_in_browser(self):
+        sources = [{
             "title": "Battery study",
-            "snippet": "Measured recycling outcomes.",
             "url": "https://example.org/battery-study",
         }]
+        client = object()
         browser_results = [
-            "Opened: https://www.google.com/search?q=batteries",
             "Opened: https://example.org/battery-study",
             "Full source text from the study.",
         ]
         with (
-            patch.object(research, "_search_web", return_value=results),
+            patch(
+                "actions.web_search._gemini_grounded_search",
+                return_value=("Grounded battery summary.", sources),
+            ) as grounded_search,
             patch("actions.browser_control.browser_control", side_effect=browser_results) as browser,
         ):
-            findings, sources = research._research_query(
-                object(),
+            findings, returned_sources = research._research_query(
+                client,
                 "batteries",
                 "Which battery is best?",
                 visible=True,
                 opened_urls=set(),
             )
 
+        grounded_search.assert_called_once_with("batteries", client=client)
+        browser.assert_has_calls([
+            call({"action": "new_tab", "url": "https://example.org/battery-study"}, player=None),
+            call({"action": "get_text"}, player=None),
+        ])
         actions = [call.args[0]["action"] for call in browser.call_args_list]
-        self.assertEqual(actions, ["search", "new_tab", "get_text"])
+        self.assertEqual(actions, ["new_tab", "get_text"])
+        self.assertIn("Grounded battery summary.", findings)
         self.assertIn("Full source text from the study", findings)
-        self.assertEqual(sources[0]["url"], "https://example.org/battery-study")
+        self.assertEqual(returned_sources, sources)
 
-    def test_search_uses_second_http_engine_when_first_is_unavailable(self):
-        bing_results = [{
+    def test_background_research_uses_grounded_search_without_browser_scraping(self):
+        sources = [{
             "title": "Independent benchmark",
-            "snippet": "Comparison results.",
             "url": "https://benchmark.example/results",
         }]
+        client = object()
         with (
-            patch.object(research, "_duckduckgo_html_search", side_effect=RuntimeError("blocked")),
-            patch.object(research, "_bing_html_search", return_value=bing_results) as bing,
+            patch(
+                "actions.web_search._gemini_grounded_search",
+                return_value=("Grounded benchmark summary.", sources),
+            ) as grounded_search,
+            patch("actions.browser_control.browser_control") as browser,
         ):
-            results = research._search_web("AI model benchmarks", max_results=3)
+            findings, returned_sources = research._research_query(
+                client,
+                "AI model benchmarks",
+                "Compare current models.",
+            )
 
-        bing.assert_called_once()
-        self.assertEqual(results, bing_results)
+        grounded_search.assert_called_once_with("AI model benchmarks", client=client)
+        browser.assert_not_called()
+        self.assertIn("Grounded benchmark summary.", findings)
+        self.assertEqual(returned_sources, sources)
 
     def test_quota_failure_uses_source_first_report_instead_of_failing(self):
         with tempfile.TemporaryDirectory() as directory:
