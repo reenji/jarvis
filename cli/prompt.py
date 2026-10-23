@@ -63,6 +63,7 @@ class InteractivePrompt:
     def _create_session(history_path: Path):
         from prompt_toolkit import PromptSession
         from prompt_toolkit.history import FileHistory, InMemoryHistory
+        from prompt_toolkit.styles import Style
 
         _secure_history_path(history_path)
         try:
@@ -73,6 +74,7 @@ class InteractivePrompt:
             history=history,
             completer=create_slash_completer(),
             complete_while_typing=True,
+            style=Style.from_dict({"prompt": "#e1b753 bold"}),
         )
 
     def prompt(self, message: str) -> str:
@@ -90,6 +92,6 @@ class InteractivePrompt:
             except ImportError:
                 return input(message)
         try:
-            return str(self._session.prompt(message))
+            return str(self._session.prompt([("class:prompt", message)]))
         finally:
             _secure_history_path(self.history_path)

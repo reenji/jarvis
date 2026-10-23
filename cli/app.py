@@ -214,7 +214,7 @@ async def _interactive(
     prompt_interrupts = 0
     while True:
         try:
-            text = prompter.prompt("You> ").strip()
+            text = prompter.prompt("› ").strip()
         except EOFError:
             ui.info("\nARGUS session saved.")
             return 0
