@@ -9,6 +9,24 @@ from typing import Any
 from cli.client import TerminalClient
 
 
+class VoiceTerminalClient(TerminalClient):
+    """Render complete voice transcripts without a desktop subtitle widget."""
+
+    def write_log(self, text: str) -> None:
+        value = str(text or "")
+        if value.startswith("You: "):
+            self._output(f"Você> {value[5:]}")
+        elif value.startswith("Argus: "):
+            self._output(f"ARGUS> {value[7:]}")
+        else:
+            super().write_log(value)
+
+    def show_subtitle(self, text: str) -> None:
+        # The Live engine emits partial transcription chunks here. Printing the
+        # final turn from write_log avoids choppy duplicate lines in a terminal.
+        return None
+
+
 def run_voice(
     *,
     output: Callable[[str], None] = print,
@@ -42,7 +60,7 @@ def run_voice(
         output("Run `argus setup` to configure and validate Gemini access.")
         return 2
 
-    terminal = TerminalClient(output=output)
+    terminal = VoiceTerminalClient(output=output)
     assistant = live_factory(
         terminal,
         str(getattr(settings.voice, "name", "puck") or "puck"),

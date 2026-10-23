@@ -66,6 +66,21 @@ class SessionStoreTests(unittest.TestCase):
         run_voice.assert_called_once_with()
         store.assert_not_called()
 
+    def test_voice_terminal_client_prints_complete_transcripts_and_system_logs(self):
+        from cli.voice import VoiceTerminalClient
+
+        output = []
+        client = VoiceTerminalClient(output=output.append)
+        client.write_log("You: Abra o Spotify")
+        client.show_subtitle("A música")
+        client.show_subtitle(" está tocando.")
+        client.write_log("Argus: A música está tocando.")
+        client.write_log("SYS: Gemini Live connected.")
+        self.assertEqual(
+            output,
+            ["Você> Abra o Spotify", "ARGUS> A música está tocando.", "[ARGUS] Gemini Live connected."],
+        )
+
     def test_debug_screens_flag_enables_private_screenshot_mode(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             with patch.dict(
