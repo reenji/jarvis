@@ -42,12 +42,13 @@ Examples (depending on what your toolset supports):
 - “Clean my downloads folder”
 - “Take a screenshot”
 
-O controle direto do mouse e do teclado fica ativado por padrão. O ARGUS pode
-usar cliques, digitação, atalhos e interação com elementos na tela para concluir
-uma tarefa solicitada, sem pedir autorização para cada entrada. Para alterar,
-abra **Configurações → Ações** e desative **Executar cliques e digitação sem
-confirmar cada ação**. O sistema operacional ainda pode exigir permissões de
-acessibilidade e captura de tela. Consulte os [termos de controle do computador](TERMS.md).
+Direct mouse and keyboard control is enabled by default. ARGUS can use clicks,
+typing, shortcuts, and on-screen controls to complete a requested task without
+asking for approval for each input. To change this, open **Configurações → Ações**
+(Settings → Actions) and turn off **Executar cliques e digitação sem confirmar
+cada ação** (“Run clicks and typing without confirming each action”). The
+operating system may still require accessibility and screen-capture permissions.
+See the [computer-control terms](TERMS.md).
 
 ### 6) Gmail
 
