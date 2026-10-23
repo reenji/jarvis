@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import time
 from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -45,6 +46,8 @@ class TextConversation:
         self._registry = registry or self._create_registry()
         self.terminal = terminal or TerminalClient()
         self.model = model or self._configured_model()
+        self.last_usage: dict[str, int] = {}
+        self.last_duration_seconds = 0.0
         self.system_instruction = system_instruction or self._build_system_instruction()
         self._tool_context = self._create_tool_context()
         self.history = self._restore_history(store.load_history(session_id))
@@ -158,7 +161,11 @@ class TextConversation:
         function_calls: dict[tuple[str | None, str], dict[str, Any]] = {}
         other_parts = []
         role = "model"
+        usage_metadata = None
         async for chunk in stream:
+            chunk_usage = getattr(chunk, "usage_metadata", None)
+            if chunk_usage is not None:
+                usage_metadata = chunk_usage
             content = self._candidate_content(chunk)
             if content is not None:
                 role = str(getattr(content, "role", None) or role)
@@ -198,6 +205,7 @@ class TextConversation:
         return SimpleNamespace(
             text=full_text or None,
             candidates=[SimpleNamespace(content=combined)],
+            usage_metadata=usage_metadata,
         )
 
     async def _generate_non_streaming(self, config):
@@ -237,6 +245,26 @@ class TextConversation:
             if getattr(part, "text", None)
         ).strip()
 
+    @staticmethod
+    def _usage_summary(response) -> dict[str, int]:
+        metadata = getattr(response, "usage_metadata", None)
+        if metadata is None:
+            return {}
+        fields = {
+            "input_tokens": "prompt_token_count",
+            "output_tokens": "candidates_token_count",
+            "total_tokens": "total_token_count",
+        }
+        summary = {}
+        for key, attribute in fields.items():
+            value = getattr(metadata, attribute, None)
+            if value is not None:
+                try:
+                    summary[key] = int(value)
+                except (TypeError, ValueError, OverflowError):
+                    continue
+        return summary
+
     async def _run_tool(self, function_call) -> dict[str, Any]:
         name = str(function_call.name)
         args = dict(getattr(function_call, "args", None) or {})
@@ -247,6 +275,7 @@ class TextConversation:
                 ctx=self._tool_context,
                 args=args,
             )
+            self.terminal.write_log(f"SYS: Finished {name}.")
             return result if isinstance(result, dict) else {"result": str(result)}
         except Exception as exc:
             self.terminal.write_log(f"ERR: {name} — {str(exc)[:180]}")
@@ -260,6 +289,8 @@ class TextConversation:
 
         if self._types is None:
             self._types = types
+        started_at = time.perf_counter()
+        self.last_usage = {}
         turn_start = len(self.history)
         self.history.append(types.Content(role="user", parts=[types.Part(text=user_text)]))
         self._save_history()
@@ -269,6 +300,8 @@ class TextConversation:
             del self.history[turn_start:]
             self._save_history()
             raise
+        finally:
+            self.last_duration_seconds = time.perf_counter() - started_at
 
     async def _complete_turn(self, *, on_text=None) -> str:
         types = self._types
@@ -279,6 +312,7 @@ class TextConversation:
                 raise RuntimeError("O Gemini retornou uma resposta sem conteúdo.")
             calls = self._function_calls(content)
             if not calls:
+                self.last_usage = self._usage_summary(response)
                 self.history.append(content)
                 self._save_history()
                 answer = self._response_text(response, content)
