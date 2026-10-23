@@ -125,6 +125,7 @@ class HostedApiTests(unittest.TestCase):
             set_state=lambda _state: None,
             muted=False,
         )
+        argus.client = argus.ui
         call = SimpleNamespace(id="tenant-call", name="web_search", args={"query": "test"})
 
         with patch.object(main, "web_search_action", side_effect=lambda **_kwargs: get_current_user_id()):
