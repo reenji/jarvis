@@ -861,8 +861,11 @@ class UIRegressionTests(unittest.TestCase):
         self.assertEqual(client.aio.models.generate_content.await_count, 1)
 
     def test_time_aware_greeting_boundaries(self):
+        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 4, 59)).startswith("Boa noite."))
         self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 5)).startswith("Bom dia."))
+        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 11, 59)).startswith("Bom dia."))
         self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 12)).startswith("Boa tarde."))
+        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 17, 59)).startswith("Boa tarde."))
         self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 18)).startswith("Boa noite."))
 
     def test_full_tour_is_chaptered_for_a_ninety_second_delivery(self):
