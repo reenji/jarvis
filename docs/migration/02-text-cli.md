@@ -1,13 +1,18 @@
 # Phase 2: text CLI and sessions
 
 The `argus` console script now points to `cli.app:main`. With no subcommand it
-starts an interactive text conversation; `argus chat` does the same explicitly.
+starts the saved default mode; `argus chat` always starts a text conversation.
+Text mode shows the ARGUS eye banner, styles tool activity, and renders answers
+as Markdown in a Rich panel, with a plain-text fallback for constrained output.
 `argus ask <prompt>` sends one turn and prints the response. The one-shot form
 also prints the session ID to stderr so it can be resumed later.
 
 ## Commands
 
 - `argus chat [--session ID]` starts a new session or resumes an existing one.
+- `argus -q <prompt>` sends one prompt without entering interactive mode.
+- `argus --continue` resumes the most recently used session interactively;
+  combine it with `-q` to append one turn to that session.
 - `argus ask <prompt> [--session ID]` sends one turn, optionally appending it to
   a session.
 - `argus sessions [--limit N]` lists recent sessions.
@@ -47,9 +52,8 @@ use the repository's established environment setup to supply runtime packages.
 
 ## Remaining Phase 2 parity work
 
-This first pass provides usable text sessions but does not yet meet every PDF
-acceptance criterion. Before Phase 7, add the eye banner and brand candidates,
-Rich streaming and tool/source lines, `-q` and `--continue` aliases, prompt
-history and slash completion, and clean Ctrl+C cancellation of an in-progress
-tool action. Track these as a separate feature change rather than treating this
-phase as complete.
+The terminal parity follow-up is in progress. The eye banner, formatted
+responses and tool log lines, and `-q`/`--continue` shortcuts are implemented.
+Before Phase 7, finish live response streaming, prompt history and slash
+completion, and cancellation of an in-progress turn without corrupting its
+saved session history.

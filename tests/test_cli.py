@@ -1,4 +1,5 @@
 import asyncio
+from io import StringIO
 import os
 import sqlite3
 import sys
@@ -88,6 +89,49 @@ class SessionStoreTests(unittest.TestCase):
     def test_quick_question_flags_cannot_be_combined_with_subcommands(self):
         with self.assertRaises(SystemExit):
             main(["-q", "hello", "chat"])
+
+    def test_terminal_ui_formats_banner_responses_and_tool_logs_with_plain_fallback(self):
+        from cli.client import TerminalClient
+        from cli.terminal_ui import TerminalUI
+
+        output = []
+        errors = []
+        ui = TerminalUI(output=output.append, error_output=errors.append)
+        terminal = TerminalClient(output=ui.system, error=ui.error)
+
+        ui.banner()
+        ui.assistant("**Ready**")
+        terminal.write_log("SYS: Opening Calculator.")
+        terminal.write_log("ERR: Tool failed.")
+
+        self.assertIn("(o) ARGUS", output[0])
+        self.assertIn("ARGUS> **Ready**", output[1])
+        self.assertEqual(output[2], "[ARGUS] Opening Calculator.")
+        self.assertEqual(errors, ["[ARGUS] Tool failed."])
+
+    def test_terminal_ui_renders_markdown_with_rich_when_available(self):
+        from rich.console import Console
+
+        from cli.terminal_ui import TerminalUI
+
+        output = StringIO()
+        errors = StringIO()
+        ui = TerminalUI(
+            console=Console(file=output, force_terminal=False, width=100),
+            error_console=Console(file=errors, force_terminal=False, width=100),
+        )
+
+        ui.banner()
+        ui.assistant("**Ready**")
+        ui.system("Opening Calculator.")
+        ui.error("[ARGUS] Tool failed.")
+
+        rendered = output.getvalue()
+        self.assertIn("ARGUS", rendered)
+        self.assertIn("Ready", rendered)
+        self.assertNotIn("**Ready**", rendered)
+        self.assertIn("Opening Calculator.", rendered)
+        self.assertIn("Tool failed.", errors.getvalue())
 
     def test_voice_command_dispatches_without_opening_text_session_storage(self):
         with patch("cli.app._run_voice", return_value=0) as run_voice:
