@@ -27,7 +27,7 @@ In Terminal, run:
 
 ```bash
 git clone https://github.com/reenji/jarvis.git
-cd argus
+cd jarvis
 python scripts/setup_argus.py
 ```
 
