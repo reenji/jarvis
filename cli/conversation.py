@@ -260,9 +260,18 @@ class TextConversation:
 
         if self._types is None:
             self._types = types
+        turn_start = len(self.history)
         self.history.append(types.Content(role="user", parts=[types.Part(text=user_text)]))
         self._save_history()
+        try:
+            return await self._complete_turn(on_text=on_text)
+        except asyncio.CancelledError:
+            del self.history[turn_start:]
+            self._save_history()
+            raise
 
+    async def _complete_turn(self, *, on_text=None) -> str:
+        types = self._types
         for _round in range(self.MAX_TOOL_ROUNDS + 1):
             response = await self._generate(on_text=on_text)
             content = self._candidate_content(response)

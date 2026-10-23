@@ -56,8 +56,12 @@ use the repository's established environment setup to supply runtime packages.
 
 ## Remaining Phase 2 parity work
 
-The terminal parity follow-up is in progress. The eye banner, formatted and
+## Phase 2 acceptance status
+
+The terminal parity work is implemented: the eye banner, formatted and
 streamed responses, tool log lines, `-q`/`--continue` shortcuts, prompt
-history, and slash completion are implemented. Before Phase 7, finish
-cancellation of an in-progress turn without corrupting its saved session
-history.
+history, slash completion, and turn cancellation. Ctrl+C during a response
+cancels the active turn, removes that incomplete turn from saved conversation
+history, and returns to the prompt. An SDK request or tool action that is
+already running outside cancellable async code may still finish. Run the
+focused CLI tests and the full pre-removal CI gate before Phase 7.

@@ -214,6 +214,15 @@ async def _interactive(store: SessionStore, session_id: str | None) -> int:
         try:
             with ui.response_stream() as on_text:
                 answer = await conversation.ask(text, on_text=on_text)
+        except asyncio.CancelledError:
+            task = asyncio.current_task()
+            if task is not None:
+                task.uncancel()
+            ui.info(
+                "\nPedido interrompido. Uma ação que já começou pode terminar; "
+                "a conversa continua."
+            )
+            continue
         except Exception as exc:
             ui.error(f"ARGUS error: {str(exc)[:300]}")
             continue

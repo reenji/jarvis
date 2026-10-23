@@ -86,6 +86,67 @@ class SessionStoreTests(unittest.TestCase):
             [(store, "latest-session"), (store, None)],
         )
 
+    def test_interactive_session_continues_after_a_cancelled_turn(self):
+        from contextlib import contextmanager
+
+        from cli.app import _interactive
+
+        class FakePrompt:
+            def __init__(self):
+                self.values = iter(["first request", "second request", "/exit"])
+
+            def prompt(self, _message):
+                return next(self.values)
+
+        class FakeUI:
+            def __init__(self):
+                self.messages = []
+                self.answers = []
+
+            def banner(self):
+                return None
+
+            def info(self, message):
+                self.messages.append(message)
+
+            def system(self, _message):
+                return None
+
+            def error(self, _message):
+                return None
+
+            def assistant(self, answer):
+                self.answers.append(answer)
+
+            @contextmanager
+            def response_stream(self):
+                yield lambda _chunk: None
+
+        class FakeConversation:
+            session_id = "0123456789abcdef"
+
+            def __init__(self):
+                self.calls = 0
+
+            async def ask(self, _text, *, on_text=None):
+                self.calls += 1
+                if self.calls == 1:
+                    raise asyncio.CancelledError
+                return "The second request completed."
+
+        prompt = FakePrompt()
+        ui = FakeUI()
+        conversation = FakeConversation()
+        with patch("cli.prompt.InteractivePrompt", return_value=prompt):
+            with patch("cli.terminal_ui.TerminalUI", return_value=ui):
+                with patch("cli.app._new_conversation", return_value=conversation):
+                    result = asyncio.run(_interactive(object(), None))
+
+        self.assertEqual(result, 0)
+        self.assertEqual(conversation.calls, 2)
+        self.assertTrue(any("Pedido interrompido" in message for message in ui.messages))
+        self.assertEqual(ui.answers, ["The second request completed."])
+
     def test_quick_question_flags_cannot_be_combined_with_subcommands(self):
         with self.assertRaises(SystemExit):
             main(["-q", "hello", "chat"])
@@ -544,6 +605,44 @@ class TextConversationTests(unittest.TestCase):
             ctx=conversation._tool_context,
             args={"app_name": "Calculator"},
         )
+
+    def test_cancelled_turn_rolls_back_partial_model_history(self):
+        async def run_cancelled_turn():
+            started = asyncio.Event()
+            never = asyncio.Event()
+
+            class BlockingModels:
+                async def generate_content_stream(self, **_kwargs):
+                    started.set()
+
+                    async def stream():
+                        await never.wait()
+                        yield SimpleNamespace(text="unreachable", candidates=[])
+
+                    return stream()
+
+            client = SimpleNamespace(
+                models=SimpleNamespace(generate_content=Mock()),
+                aio=SimpleNamespace(models=BlockingModels()),
+            )
+            conversation = TextConversation(
+                self.session_id,
+                self.store,
+                client=client,
+                registry=FakeRegistry(),
+                system_instruction="test system instruction",
+            )
+            request = asyncio.create_task(
+                conversation.ask("Cancel this request.", on_text=lambda _chunk: None)
+            )
+            await started.wait()
+            request.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await request
+            self.assertEqual(conversation.history, [])
+            self.assertEqual(self.store.load_history(self.session_id), [])
+
+        asyncio.run(run_cancelled_turn())
 
 
 if __name__ == "__main__":
