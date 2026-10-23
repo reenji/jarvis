@@ -85,6 +85,7 @@ outputs/
 *.sixth/
 
 # Local backup snapshots / experiments
+*.bak
 *.before_*
 *.broken_*
 *.before_remove
