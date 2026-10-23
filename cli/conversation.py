@@ -43,7 +43,7 @@ class TextConversation:
         self._model_client = client or self._create_model_client()
         self._registry = registry or self._create_registry()
         self.terminal = terminal or TerminalClient()
-        self.model = model or os.environ.get("ARGUS_CLI_MODEL", "gemini-2.5-flash")
+        self.model = model or self._configured_model()
         self.system_instruction = system_instruction or self._build_system_instruction()
         self._tool_context = self._create_tool_context()
         self.history = self._restore_history(store.load_history(session_id))
@@ -61,6 +61,15 @@ class TextConversation:
         from tools.registry import registry
 
         return registry
+
+    @staticmethod
+    def _configured_model() -> str:
+        override = os.environ.get("ARGUS_CLI_MODEL")
+        if override:
+            return override
+        from config.settings import get_settings
+
+        return get_settings().llm.model
 
     def _create_tool_context(self):
         from tools.registry import ToolContext
