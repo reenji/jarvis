@@ -1,7 +1,7 @@
 # CLI migration status
 
 Repository: reenji/jarvis
-Active branch: feat/cli-voice (stacked on feat/cli-terminal-tools)
+Active branch: feat/cli-packaging (stacked on bugfix/voice-text-fallback)
 Migration plan source: attached PDF, reviewed before implementation.
 
 ## Progress
@@ -14,9 +14,9 @@ Migration plan source: attached PDF, reviewed before implementation.
 | 3. Setup, configuration, and doctor | Implemented | Adds hidden-key setup, private user config, redacted config commands, and local/API diagnostics. Clean-install verification depends on Phase 6 packaging. PR is stacked on Phase 2. |
 | 4. Desktop tools | Implemented; desktop validation pending | Bounded Windows screen control, terminal protection, app focus delay, sensitive-share guard, anti-bot stop, and opt-in local debug screenshots. |
 | 5. Optional voice | Implemented; live hardware validation pending | Adds Gemini Live terminal mode, saved default-mode preference, full-turn transcripts, lazy audio loading, and text fallback when audio support or devices are unavailable. |
-| 6. Packaging and installation | Pending | Keep the hosted API/web deployment path intact. |
+| 6. Packaging and installation | Implemented; local clean-wheel validation passed; hosted CI pending | Adds dependency extras, GitHub-based pipx/uv installers for macOS/Linux and Windows, and an isolated wheel smoke check. Keeps hosted API/web manifests and deployment workflows. |
 | 7. Retire the desktop app | Pending | Only after the replacement CLI is usable and verified. |
-| 8. Final tests, CI, and documentation | Pending | Move the pre-removal CI/test gate ahead of phase 7. |
+| 8. Final tests, CI, and documentation | In progress before Phase 7 | Packaging CI gate is added; full pre-removal suite and Phase 2 parity checks remain. |
 
 ## Execution rules
 

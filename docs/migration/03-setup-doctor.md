@@ -53,6 +53,6 @@ devices and never open a microphone or speaker stream.
 
 Automated tests use mocked API and hardware clients. They do not make a live
 Gemini request or send real mouse, keyboard, screen, or audio operations. The
-dependency split for clean installations remains Phase 6; missing desktop
-packages are reported as optional capability failures until that packaging
-phase is complete.
+base package supplies local computer-control dependencies; missing optional
+browser, document, or audio packages are reported as unavailable capabilities.
+See [Phase 6 packaging](06-packaging.md) for install profiles and repair steps.

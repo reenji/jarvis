@@ -5,8 +5,64 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "argus-mark-xxxix"
 version = "0.1.0"
-description = "ARGUS text CLI and local assistant"
+description = "ARGUS terminal assistant and local automation CLI"
 requires-python = ">=3.11"
+dependencies = [
+    "google-genai",
+    "keyring",
+    "mss",
+    "Pillow",
+    "prompt-toolkit>=3,<4",
+    "psutil",
+    "pydantic>=2,<3",
+    "pydantic-settings>=2,<3",
+    "PyAutoGUI",
+    "PyYAML>=6,<7",
+    "pygetwindow",
+    "pyperclip",
+    'comtypes; platform_system == "Windows"',
+    'keyboard==0.13.5; platform_system == "Windows"',
+    'pycaw; platform_system == "Windows"',
+    'pywinauto; platform_system == "Windows"',
+]
+
+[project.optional-dependencies]
+voice = ["numpy", "sounddevice"]
+browser = ["beautifulsoup4", "playwright", "requests"]
+documents = [
+    "lxml",
+    "openpyxl",
+    "pandas",
+    "pdfplumber",
+    "PyMuPDF",
+    "PyPDF2",
+    "pydub",
+    "python-docx",
+    "python-pptx",
+    "send2trash",
+    "xlrd",
+]
+integrations = [
+    "google-api-python-client",
+    "google-auth-httplib2",
+    "google-auth-oauthlib",
+    "google-generativeai",
+    "youtube-transcript-api",
+]
+tts = ["edge-tts", "elevenlabs", "openai", "soundfile"]
+api = [
+    "alembic>=1.13,<2",
+    "cryptography>=44,<51; platform_system != 'Darwin'",
+    "cryptography==48.0.0; platform_system == 'Darwin' and platform_machine == 'x86_64' and python_version >= '3.14'",
+    "email-validator>=2.2,<3",
+    "fastapi",
+    "google-generativeai",
+    "psycopg[binary]>=3.2,<4",
+    "redis>=5,<7",
+    "sounddevice",
+    "SQLAlchemy>=2,<3",
+    "uvicorn[standard]",
+]
 
 [project.scripts]
 argus = "cli.app:main"

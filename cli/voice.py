@@ -25,7 +25,7 @@ def _audio_unavailable_reason(
             audio_available = lambda: False
     try:
         if not audio_available():
-            return "Voice support is not installed. Install the optional voice extra."
+            return "Voice support is not installed; reinstall ARGUS with its optional [voice] extra."
     except Exception:
         return "Voice support could not load its optional audio dependency."
 
@@ -36,7 +36,7 @@ def _audio_unavailable_reason(
             devices_loader = sd.query_devices
         devices = devices_loader()
     except Exception as exc:
-        return f"Voice audio devices are unavailable ({type(exc).__name__})."
+        return f"Voice audio devices are unavailable ({type(exc).__name__}); check device access and OS permissions."
 
     try:
         device_list = list(devices.values() if isinstance(devices, dict) else devices)
@@ -48,7 +48,7 @@ def _audio_unavailable_reason(
         missing = "microphone" if not has_input else "speaker"
         if not has_input and not has_output:
             missing = "microphone and speaker"
-        return f"No usable {missing} is available for voice mode."
+        return f"No usable {missing} is available; check device connections and OS permissions."
     return None
 
 
@@ -94,7 +94,7 @@ def run_voice(
         except ImportError as exc:
             output(
                 "Voice mode could not load its optional desktop dependencies "
-                f"({getattr(exc, 'name', None) or type(exc).__name__})."
+                f"({getattr(exc, 'name', None) or type(exc).__name__}); check the installed voice extra."
             )
             return VOICE_UNAVAILABLE
         live_factory = ArgusLive

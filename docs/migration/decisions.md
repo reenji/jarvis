@@ -32,6 +32,13 @@ These decisions adapt the attached migration plan to reenji/jarvis and the owner
 - Voice mode uses the user's existing Gemini setup and saved voice name; its audio dependencies remain optional and are packaged in Phase 6.
 - If the optional voice dependency or a usable microphone/speaker is unavailable, explain the limitation and continue in an interactive text session. Check device availability without opening audio streams. Provider configuration or network failures remain voice errors and do not silently switch modes.
 
+### Phase 6: packaging
+
+- Keep text, Gemini, configuration/keyring, prompt handling, and the core local computer-control dependencies in the base install so `pipx install git+https://github.com/reenji/jarvis.git` provides the primary CLI features. Keep PyQt and voice audio out of that base.
+- Define optional `voice`, `browser`, `documents`, `integrations`, `tts`, and `api` extras from the module inventory. Voice is installed explicitly; the hosted API's existing `requirements-api.txt` remains its deployment source of truth.
+- Install from GitHub with `uv` when available and otherwise `pipx`. Do not publish to PyPI. Installer scripts check Python 3.11+, install the CLI, and invoke first-run setup; they do not alter user files outside ARGUS configuration/state.
+- Keep the app's `argus` console script and package discovery for core, tools, actions, and API modules. Do not remove UI packages or desktop build files until Phase 7.
+
 ## Configuration storage
 
 - Store the user config next to the CLI's per-user state database, using the OS-specific directory already selected by `ARGUS_HOME` and the session store. This keeps config, session state, and their access controls together; `ARGUS_CONFIG_FILE` can select a different config file.
