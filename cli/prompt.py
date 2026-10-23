@@ -13,6 +13,7 @@ SLASH_COMMANDS = (
     "/help",
     "/new",
     "/sessions",
+    "/voice",
     "/doctor",
     "/resume",
     "/clear",

@@ -11,6 +11,10 @@ from collections.abc import Sequence
 from cli.history import SessionStore
 
 
+class _VoiceModeRequested(Exception):
+    """Signal the synchronous CLI loop to switch from text to voice."""
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="argus",
@@ -34,6 +38,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-banner",
         action="store_true",
         help="hide the startup banner",
+    )
+    parser.add_argument(
+        "--voice",
+        action="store_true",
+        help="start the optional live voice assistant",
     )
     parser.add_argument(
         "--debug-screens",
@@ -102,7 +111,7 @@ def _new_conversation(
     return TextConversation(resolved, store, terminal=terminal)
 
 
-def _run_voice(*, show_banner: bool = True) -> int:
+def _run_voice(*, show_banner: bool = True, fallback_to_text: bool = True) -> int:
     # Keep microphone and live-model imports out of every text-only command.
     from cli.voice import VOICE_UNAVAILABLE, run_voice
     if show_banner:
@@ -111,7 +120,7 @@ def _run_voice(*, show_banner: bool = True) -> int:
         TerminalUI().banner()
 
     result = run_voice()
-    if result != VOICE_UNAVAILABLE:
+    if result != VOICE_UNAVAILABLE or not fallback_to_text:
         return result
 
     print("A voz não está disponível; iniciando uma sessão de texto.")
@@ -121,7 +130,7 @@ def _run_voice(*, show_banner: bool = True) -> int:
         print(f"Could not open ARGUS session storage: {exc}", file=sys.stderr)
         return 2
     try:
-        return asyncio.run(_interactive(store, None, show_banner=False))
+        return _run_interactive(store, None, show_banner=False)
     except KeyboardInterrupt:
         print("\nARGUS session saved.")
         return 130
@@ -131,6 +140,37 @@ def _default_voice_enabled() -> bool:
     from config.settings import get_settings
 
     return bool(get_settings().voice.enabled)
+
+
+def _run_interactive(
+    store: SessionStore,
+    session_id: str | None,
+    *,
+    show_banner: bool = True,
+) -> int:
+    """Run text and voice modes sequentially on their own asyncio loops."""
+    first_turn = True
+    while True:
+        try:
+            return asyncio.run(
+                _interactive(
+                    store,
+                    session_id,
+                    show_banner=show_banner if first_turn else False,
+                )
+            )
+        except _VoiceModeRequested:
+            from cli.voice import VOICE_UNAVAILABLE
+
+            result = _run_voice(show_banner=False, fallback_to_text=False)
+            if result == VOICE_UNAVAILABLE:
+                print("A voz não está disponível; continuando em texto.")
+            elif result not in {0, 130}:
+                return result
+            first_turn = False
+        except KeyboardInterrupt:
+            print("\nARGUS session saved.")
+            return 130
 
 
 async def _interactive(
@@ -174,6 +214,7 @@ async def _interactive(
                 ui.info(
                     "/new — start a new session\n"
                     "/sessions — list saved sessions\n"
+                    "/voice — switch to voice mode, then return here\n"
                     "/doctor — check configuration and capabilities\n"
                     "/resume ID — switch to a saved session\n"
                     "/clear — clear this session's conversation\n"
@@ -181,6 +222,9 @@ async def _interactive(
                     "/exit — save and leave"
                 )
                 continue
+            if command == "/voice":
+                ui.info("Switching to voice mode. Press Ctrl+C to return to text.")
+                raise _VoiceModeRequested
             if command == "/sessions":
                 _show_sessions(store)
                 continue
@@ -272,6 +316,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command is not None and (args.quick_question is not None or args.continue_session):
         parser.error("-q/--question and --continue cannot be combined with a subcommand")
+    if args.voice and (args.command is not None or args.quick_question is not None or args.continue_session):
+        parser.error("--voice cannot be combined with a subcommand, -q/--question, or --continue")
     if args.quick_question is not None and not args.quick_question.strip():
         parser.error("-q/--question requires non-empty text")
     if args.debug_screens:
@@ -279,6 +325,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     from cli.banner import should_show_banner
 
     show_banner = should_show_banner(no_banner=args.no_banner)
+
+    if args.voice:
+        return _run_voice(show_banner=show_banner)
 
     if args.command == "setup":
         from cli.setup import run_setup
@@ -321,7 +370,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.continue_session:
         latest = store.list(limit=1)
         session_id = latest[0].id if latest else None
-        return asyncio.run(_interactive(store, session_id, show_banner=show_banner))
+        return _run_interactive(store, session_id, show_banner=show_banner)
 
     if args.command == "sessions":
         _show_sessions(store, limit=args.limit)
@@ -342,12 +391,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "ask":
             prompt = " ".join(args.prompt).strip()
             return asyncio.run(_ask_once(store, prompt, args.session))
-        return asyncio.run(
-            _interactive(
-                store,
-                getattr(args, "session", None),
-                show_banner=show_banner,
-            )
+        return _run_interactive(
+            store,
+            getattr(args, "session", None),
+            show_banner=show_banner,
         )
     except KeyboardInterrupt:
         print("\nARGUS session saved.")

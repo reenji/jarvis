@@ -59,6 +59,7 @@ class SessionStoreTests(unittest.TestCase):
         self.assertEqual(parser.parse_args(["chat", "--resume", "abc"]).session, "abc")
         self.assertEqual(parser.parse_args(["-q", "hello"]).quick_question, "hello")
         self.assertTrue(parser.parse_args(["--continue"]).continue_session)
+        self.assertTrue(parser.parse_args(["--voice"]).voice)
         self.assertEqual(parser.parse_args(["sessions", "--limit", "5"]).limit, 5)
         self.assertTrue(parser.parse_args(["--debug-screens", "ask", "hello"]).debug_screens)
         self.assertEqual(parser.parse_args(["voice"]).command, "voice")
@@ -150,6 +151,17 @@ class SessionStoreTests(unittest.TestCase):
     def test_quick_question_flags_cannot_be_combined_with_subcommands(self):
         with self.assertRaises(SystemExit):
             main(["-q", "hello", "chat"])
+
+    def test_voice_flag_dispatches_without_opening_text_session_storage(self):
+        with patch("cli.app._run_voice", return_value=0) as run_voice:
+            with patch("cli.app.SessionStore") as store:
+                self.assertEqual(main(["--voice"]), 0)
+        run_voice.assert_called_once_with(show_banner=False)
+        store.assert_not_called()
+
+    def test_voice_flag_cannot_be_combined_with_text_commands(self):
+        with self.assertRaises(SystemExit):
+            main(["--voice", "--continue"])
 
     def test_terminal_ui_formats_banner_responses_and_tool_logs_with_plain_fallback(self):
         from cli.client import TerminalClient
@@ -281,6 +293,50 @@ class SessionStoreTests(unittest.TestCase):
                 completer.get_completions(Document("/he"), CompleteEvent())
             )
         self.assertEqual([item.text for item in completions], ["/help"])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            completer = create_slash_completer()
+            completions = list(
+                completer.get_completions(Document("/vo"), CompleteEvent())
+            )
+        self.assertEqual([item.text for item in completions], ["/voice"])
+
+    def test_interactive_voice_switch_returns_to_the_text_prompt_after_voice_ends(self):
+        from cli.app import _VoiceModeRequested, _run_interactive
+
+        prompts = []
+
+        async def fake_interactive(_store, _session_id, *, show_banner):
+            prompts.append(show_banner)
+            if len(prompts) == 1:
+                raise _VoiceModeRequested
+            return 0
+
+        with patch("cli.app._interactive", new=fake_interactive):
+            with patch("cli.app._run_voice", return_value=130) as run_voice:
+                self.assertEqual(
+                    _run_interactive(object(), None, show_banner=True),
+                    0,
+                )
+
+        self.assertEqual(prompts, [True, False])
+        run_voice.assert_called_once_with(show_banner=False, fallback_to_text=False)
+
+    def test_voice_slash_command_requests_a_mode_switch(self):
+        from cli.app import _VoiceModeRequested, _interactive
+
+        class VoicePrompt:
+            def prompt(self, _message):
+                return "/voice"
+
+        ui = Mock()
+        conversation = SimpleNamespace(session_id="session-id")
+        with patch("cli.prompt.InteractivePrompt", return_value=VoicePrompt()):
+            with patch("cli.terminal_ui.TerminalUI", return_value=ui):
+                with patch("cli.app._new_conversation", return_value=conversation):
+                    with self.assertRaises(_VoiceModeRequested):
+                        asyncio.run(_interactive(object(), None, show_banner=False))
+
+        ui.info.assert_any_call("Switching to voice mode. Press Ctrl+C to return to text.")
 
     def test_banner_can_be_saved_as_a_top_level_user_preference(self):
         from cli.config_commands import set_config_value
