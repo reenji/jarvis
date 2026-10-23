@@ -26,7 +26,7 @@ QA environment.
 In Terminal, run:
 
 ```bash
-git clone https://github.com/anonymandk/argus.git
+git clone https://github.com/reenji/jarvis.git
 cd argus
 python scripts/setup_argus.py
 ```
