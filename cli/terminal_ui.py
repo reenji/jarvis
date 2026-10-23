@@ -10,6 +10,10 @@ from typing import Any
 
 from cli.banner import EYE_BANNER, banner_details
 
+ACCENT = "#e1b753"
+ACCENT_DIM = "#806c3e"
+SUCCESS = "#8ebd82"
+
 
 class TerminalUI:
     def __init__(
@@ -54,8 +58,10 @@ class TerminalUI:
 
         from rich.text import Text
 
-        self.console.print(Text(EYE_BANNER, style="bold bright_cyan"))
-        self.console.print(Text(details, style="bold cyan"))
+        line = Text("● ARGUS", style=f"bold {ACCENT}")
+        line.append(f"  {details.removeprefix('ARGUS CLI ')}", style="dim")
+        self.console.print(line)
+        self.console.rule(style=ACCENT_DIM)
 
     def info(self, text: str) -> None:
         if self.console is None:
@@ -73,9 +79,8 @@ class TerminalUI:
             return
         from rich.text import Text
 
-        line = Text("" if already_prefixed else "[ARGUS] ", style="bold cyan")
+        line = Text("  ◌ ", style=ACCENT)
         if already_prefixed:
-            line.append("[ARGUS] ", style="bold cyan")
             value = value[len("[ARGUS] "):]
         line.append(value, style="dim")
         self.console.print(line)
@@ -101,8 +106,26 @@ class TerminalUI:
         self.console.print(
             Panel(
                 Markdown(str(text)),
-                title=Text("ARGUS", style="bold bright_cyan"),
-                border_style="cyan",
+                title=Text("ARGUS", style=f"bold {ACCENT}"),
+                border_style=ACCENT,
+                padding=(0, 1),
+            )
+        )
+
+    def user_turn(self, text: str) -> None:
+        value = str(text or "").strip()
+        if self.console is None:
+            self._output(f"● {value}")
+            return
+
+        from rich.panel import Panel
+        from rich.text import Text
+
+        self.console.print(
+            Panel(
+                Text(value, style="bold white"),
+                title=Text("● REQUEST", style=f"bold {ACCENT}"),
+                border_style=ACCENT_DIM,
                 padding=(0, 1),
             )
         )
@@ -116,16 +139,24 @@ class TerminalUI:
 
         from rich.live import Live
         from rich.markdown import Markdown
+        from rich.panel import Panel
 
         buffer = []
         with Live(
-            Markdown(""),
+            Panel(Markdown("Respondendo…"), title="ARGUS", border_style=ACCENT),
             console=self.console,
             transient=True,
             refresh_per_second=12,
         ) as live:
             def update(chunk: str) -> None:
                 buffer.append(str(chunk))
-                live.update(Markdown("".join(buffer)), refresh=True)
+                live.update(
+                    Panel(
+                        Markdown("".join(buffer)),
+                        title="ARGUS",
+                        border_style=ACCENT,
+                    ),
+                    refresh=True,
+                )
 
             yield update
