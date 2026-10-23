@@ -31,6 +31,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="resume the most recently used session",
     )
     parser.add_argument(
+        "--no-banner",
+        action="store_true",
+        help="hide the startup banner",
+    )
+    parser.add_argument(
         "--debug-screens",
         action="store_true",
         help="save screen-control captures under the per-user Argus debug directory",
@@ -59,7 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
     config_commands.add_parser("path", help="print the user configuration path")
     config_commands.add_parser("show", help="show effective settings with secrets hidden")
     config_set = config_commands.add_parser("set", help="set a supported preference")
-    config_set.add_argument("key", help="voice.enabled, voice.name, or llm.model")
+    config_set.add_argument("key", help="banner, voice.enabled, voice.name, or llm.model")
     config_set.add_argument("value", help="new preference value")
     return parser
 
@@ -97,9 +102,13 @@ def _new_conversation(
     return TextConversation(resolved, store, terminal=terminal)
 
 
-def _run_voice() -> int:
+def _run_voice(*, show_banner: bool = True) -> int:
     # Keep microphone and live-model imports out of every text-only command.
     from cli.voice import VOICE_UNAVAILABLE, run_voice
+    if show_banner:
+        from cli.terminal_ui import TerminalUI
+
+        TerminalUI().banner()
 
     result = run_voice()
     if result != VOICE_UNAVAILABLE:
@@ -112,7 +121,7 @@ def _run_voice() -> int:
         print(f"Could not open ARGUS session storage: {exc}", file=sys.stderr)
         return 2
     try:
-        return asyncio.run(_interactive(store, None))
+        return asyncio.run(_interactive(store, None, show_banner=False))
     except KeyboardInterrupt:
         print("\nARGUS session saved.")
         return 130
@@ -124,7 +133,12 @@ def _default_voice_enabled() -> bool:
     return bool(get_settings().voice.enabled)
 
 
-async def _interactive(store: SessionStore, session_id: str | None) -> int:
+async def _interactive(
+    store: SessionStore,
+    session_id: str | None,
+    *,
+    show_banner: bool = True,
+) -> int:
     from cli.client import TerminalClient
     from cli.prompt import InteractivePrompt
     from cli.terminal_ui import TerminalUI
@@ -138,7 +152,8 @@ async def _interactive(store: SessionStore, session_id: str | None) -> int:
         ui.error(str(exc))
         return 2
 
-    ui.banner()
+    if show_banner:
+        ui.banner()
     ui.info(f"ARGUS text session {conversation.session_id[:12]}. Type /help for commands.")
     while True:
         try:
@@ -261,6 +276,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error("-q/--question requires non-empty text")
     if args.debug_screens:
         os.environ["ARGUS_DEBUG_SCREENSHOTS"] = "true"
+    from cli.banner import should_show_banner
+
+    show_banner = should_show_banner(no_banner=args.no_banner)
 
     if args.command == "setup":
         from cli.setup import run_setup
@@ -271,11 +289,11 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         return run_doctor()
     if args.command == "voice":
-        return _run_voice()
+        return _run_voice(show_banner=show_banner)
     if args.command is None and args.quick_question is None and not args.continue_session:
         try:
             if _default_voice_enabled():
-                return _run_voice()
+                return _run_voice(show_banner=show_banner)
         except (OSError, ValueError) as exc:
             print(f"Could not read the voice preference: {exc}", file=sys.stderr)
             return 2
@@ -303,7 +321,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.continue_session:
         latest = store.list(limit=1)
         session_id = latest[0].id if latest else None
-        return asyncio.run(_interactive(store, session_id))
+        return asyncio.run(_interactive(store, session_id, show_banner=show_banner))
 
     if args.command == "sessions":
         _show_sessions(store, limit=args.limit)
@@ -324,7 +342,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.command == "ask":
             prompt = " ".join(args.prompt).strip()
             return asyncio.run(_ask_once(store, prompt, args.session))
-        return asyncio.run(_interactive(store, getattr(args, "session", None)))
+        return asyncio.run(
+            _interactive(
+                store,
+                getattr(args, "session", None),
+                show_banner=show_banner,
+            )
+        )
     except KeyboardInterrupt:
         print("\nARGUS session saved.")
         return 130

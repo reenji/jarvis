@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from contextlib import contextmanager
 from collections.abc import Callable
@@ -27,11 +28,16 @@ class TerminalUI:
             try:
                 from rich.console import Console
 
-                self.console = Console(highlight=False, soft_wrap=True)
+                self.console = Console(
+                    highlight=False,
+                    soft_wrap=True,
+                    no_color="NO_COLOR" in os.environ,
+                )
                 self.error_console = error_console or Console(
                     stderr=True,
                     highlight=False,
                     soft_wrap=True,
+                    no_color="NO_COLOR" in os.environ,
                 )
             except ImportError:
                 self.console = None

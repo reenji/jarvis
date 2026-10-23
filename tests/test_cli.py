@@ -179,6 +179,40 @@ class SessionStoreTests(unittest.TestCase):
         self.assertLessEqual(max(map(len, lines)), 60)
         self.assertTrue(EYE_BANNER.isascii())
 
+    def test_banner_visibility_obeys_terminal_flag_environment_and_user_config(self):
+        from cli.banner import should_show_banner
+
+        class TTY(StringIO):
+            def isatty(self):
+                return True
+
+        terminal_input = TTY()
+        terminal_output = TTY()
+        with patch("config.user_config.load_user_config", return_value={"banner": False}):
+            self.assertFalse(
+                should_show_banner(stdin=terminal_input, stdout=terminal_output)
+            )
+            with patch.dict(os.environ, {"ARGUS_CLI_BANNER": "yes"}):
+                self.assertTrue(
+                    should_show_banner(stdin=terminal_input, stdout=terminal_output)
+                )
+        self.assertFalse(
+            should_show_banner(
+                no_banner=True,
+                stdin=terminal_input,
+                stdout=terminal_output,
+            )
+        )
+        self.assertFalse(should_show_banner(stdin=StringIO(), stdout=terminal_output))
+
+    def test_terminal_ui_honors_no_color_even_when_the_variable_is_empty(self):
+        from cli.terminal_ui import TerminalUI
+
+        with patch.dict(os.environ, {"NO_COLOR": ""}):
+            ui = TerminalUI()
+        self.assertTrue(ui.console.no_color)
+        self.assertTrue(ui.error_console.no_color)
+
     def test_terminal_ui_renders_markdown_with_rich_when_available(self):
         from rich.console import Console
 
@@ -248,11 +282,22 @@ class SessionStoreTests(unittest.TestCase):
             )
         self.assertEqual([item.text for item in completions], ["/help"])
 
+    def test_banner_can_be_saved_as_a_top_level_user_preference(self):
+        from cli.config_commands import set_config_value
+
+        saved = {}
+        output = []
+        with patch("cli.config_commands.load_user_config", return_value=saved):
+            with patch("cli.config_commands.save_user_config", side_effect=lambda value: value):
+                self.assertEqual(set_config_value("banner", "false", output.append), 0)
+        self.assertIs(saved["banner"], False)
+        self.assertIn("Saved banner", output[0])
+
     def test_voice_command_dispatches_without_opening_text_session_storage(self):
         with patch("cli.app._run_voice", return_value=0) as run_voice:
             with patch("cli.app.SessionStore") as store:
                 self.assertEqual(main(["voice"]), 0)
-        run_voice.assert_called_once_with()
+        run_voice.assert_called_once_with(show_banner=False)
         store.assert_not_called()
 
     def test_explicit_voice_command_falls_back_to_text_when_audio_is_unavailable(self):
@@ -265,7 +310,7 @@ class SessionStoreTests(unittest.TestCase):
                     with patch("builtins.print") as output:
                         self.assertEqual(main(["voice"]), 0)
 
-        chat.assert_awaited_once_with(store, None)
+        chat.assert_awaited_once_with(store, None, show_banner=False)
         output.assert_any_call(
             "A voz não está disponível; iniciando uma sessão de texto."
         )
@@ -276,7 +321,7 @@ class SessionStoreTests(unittest.TestCase):
                 with patch("cli.app.SessionStore") as store:
                     self.assertEqual(main([]), 0)
         preference.assert_called_once_with()
-        run_voice.assert_called_once_with()
+        run_voice.assert_called_once_with(show_banner=False)
         store.assert_not_called()
 
         def close_interactive(coroutine):
@@ -299,7 +344,7 @@ class SessionStoreTests(unittest.TestCase):
                     with patch("cli.app._interactive", new_callable=AsyncMock, return_value=0) as chat:
                         self.assertEqual(main([]), 0)
 
-        chat.assert_awaited_once_with(store, None)
+        chat.assert_awaited_once_with(store, None, show_banner=False)
 
     def test_voice_terminal_client_prints_complete_transcripts_and_system_logs(self):
         from cli.voice import VoiceTerminalClient
