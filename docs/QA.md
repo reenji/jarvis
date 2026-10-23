@@ -4,6 +4,13 @@ The QA system has two stages. Automated checks are always run first. Supervised 
 
 ## Automated audit
 
+To prepare the same Python dependencies used by the full CI suite, install the
+editable project with its voice extra and the development profile:
+
+```bash
+python -m pip install -e ".[voice]" -r requirements-dev.txt
+```
+
 ```bash
 python3 scripts/qa.py automated
 ```
