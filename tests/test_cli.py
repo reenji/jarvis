@@ -66,6 +66,25 @@ class SessionStoreTests(unittest.TestCase):
         run_voice.assert_called_once_with()
         store.assert_not_called()
 
+    def test_no_subcommand_uses_saved_voice_preference_but_chat_forces_text(self):
+        with patch("cli.app._default_voice_enabled", return_value=True) as preference:
+            with patch("cli.app._run_voice", return_value=0) as run_voice:
+                with patch("cli.app.SessionStore") as store:
+                    self.assertEqual(main([]), 0)
+        preference.assert_called_once_with()
+        run_voice.assert_called_once_with()
+        store.assert_not_called()
+
+        def close_interactive(coroutine):
+            coroutine.close()
+            return 0
+
+        with patch("cli.app._default_voice_enabled") as preference:
+            with patch("cli.app.SessionStore", return_value=object()):
+                with patch("cli.app.asyncio.run", side_effect=close_interactive):
+                    self.assertEqual(main(["chat"]), 0)
+        preference.assert_not_called()
+
     def test_voice_terminal_client_prints_complete_transcripts_and_system_logs(self):
         from cli.voice import VoiceTerminalClient
 

@@ -98,6 +98,12 @@ def _run_voice() -> int:
     return run_voice()
 
 
+def _default_voice_enabled() -> bool:
+    from config.settings import get_settings
+
+    return bool(get_settings().voice.enabled)
+
+
 async def _interactive(store: SessionStore, session_id: str | None) -> int:
     try:
         conversation = _new_conversation(store, session_id)
@@ -212,6 +218,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         return run_doctor()
     if args.command == "voice":
         return _run_voice()
+    if args.command is None:
+        try:
+            if _default_voice_enabled():
+                return _run_voice()
+        except (OSError, ValueError) as exc:
+            print(f"Could not read the voice preference: {exc}", file=sys.stderr)
+            return 2
     if args.command == "config":
         from cli.config_commands import set_config_value, show_config
         from config.user_config import user_config_path
