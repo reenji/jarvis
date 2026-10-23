@@ -286,6 +286,9 @@ async def _interactive(
             continue
 
         try:
+            show_user_turn = getattr(ui, "user_turn", None)
+            if callable(show_user_turn):
+                show_user_turn(text)
             with ui.response_stream() as on_text:
                 answer = await conversation.ask(text, on_text=on_text)
         except asyncio.CancelledError:
@@ -316,6 +319,9 @@ async def _ask_once(store: SessionStore, prompt: str, session_id: str | None) ->
             title=prompt[:120],
             terminal=terminal,
         )
+        show_user_turn = getattr(ui, "user_turn", None)
+        if callable(show_user_turn):
+            show_user_turn(prompt)
         with ui.response_stream() as on_text:
             answer = await conversation.ask(prompt, on_text=on_text)
     except Exception as exc:
