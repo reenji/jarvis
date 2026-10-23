@@ -446,7 +446,7 @@ class FirstRunIntroOverlay(QWidget):
         if colors is not None:
             self._skip_button.setStyleSheet(f"""
                 QPushButton {{ background: {colors.BG}; color: {colors.PRI};
-                    border: 1px solid {colors.PRI_DIM}; border-radius: {TOKENS.radii['control']}px; padding: 0 14px; }}
+                    border: 1px solid {colors.PRI_DIM}; border-radius: {TOKENS.radii['control']}px; padding: 0 {TOKENS.spacing['legacy_14']}px; }}
                 QPushButton:hover {{ background: {colors.PRI_GHO}; border-color: {colors.PRI}; }}
                 QPushButton:focus {{ border: 2px solid {colors.PRI}; }}
             """)
