@@ -27,6 +27,12 @@ QA environment.
 
 In Terminal, run:
 
+> **Computer control is enabled by default.** ARGUS can use mouse and keyboard
+> input to carry out clear requests without asking before each click or keystroke.
+> Turn it off under **Settings → Actions** (**Configurações → Ações**), and read
+> the [computer-control terms](docs/TERMS.md).
+> The same controls are available from the `argus` terminal command.
+
 ```bash
 git clone https://github.com/reenji/jarvis.git
 cd jarvis
