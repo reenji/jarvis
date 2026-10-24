@@ -141,7 +141,7 @@ class LicenseManager:
 
     @property
     def api_base_url(self) -> str:
-        return os.environ.get("ARGUS_LICENSE_API_URL", LICENSE_API_URL).strip().rstrip("/")
+        return os.environ.get("ARGUS_LICENSE_API_URL", "").strip().rstrip("/") or LICENSE_API_URL
 
     @property
     def renew_url(self) -> str:
