@@ -1201,6 +1201,7 @@ class ArgusLive:
         cloud_safe: bool = False,
         api_key: str | None = None,
         external_audio: bool = False,
+        license_manager=None,
     ):
         # Keep ``ui`` as a compatibility alias for desktop integrations that
         # already inspect ArgusLive.ui. The engine contract is ArgusClient.
@@ -1209,6 +1210,10 @@ class ArgusLive:
         self.cloud_safe     = bool(cloud_safe)
         self.external_audio = bool(external_audio)
         self._api_key       = api_key.strip() if isinstance(api_key, str) else None
+        self.license_manager = license_manager
+        self.voice_enabled = (
+            bool(license_manager.can("voice")) if license_manager is not None else True
+        )
         self.tool_declarations = get_tool_declarations(
             cloud_safe=self.cloud_safe,
             direct_computer_control=load_direct_computer_control(),
@@ -1245,6 +1250,22 @@ class ArgusLive:
         self._tour_active = False
 
     def _on_text_command(self, text: str):
+        if str(text or "").strip().casefold() == "/status":
+            manager = getattr(self, "license_manager", None)
+            if manager is None:
+                self.ui.write_log("ARGUS: O status da licença está disponível no comando `argus status`.")
+                return
+            was_voice_enabled = bool(getattr(self, "voice_enabled", False))
+            manager.refresh(force=True)
+            self.voice_enabled = bool(manager.can("voice"))
+            self.ui.write_log(f"ARGUS: {manager.banner()}")
+            if was_voice_enabled != self.voice_enabled and self.session and self._loop:
+                self.ui.write_log("SYS: Reabrindo a sessão para aplicar o recurso de voz.")
+                try:
+                    asyncio.run_coroutine_threadsafe(self.session.close(), self._loop)
+                except Exception:
+                    pass
+            return
         if not self._loop or not self.session:
             return
         asyncio.run_coroutine_threadsafe(self.send_text(text), self._loop)
@@ -1268,6 +1289,15 @@ class ArgusLive:
         approvals.finish_user_turn(self._current_input_transcript)
         self._last_input_transcript = self._current_input_transcript
         self._last_input_transcript_at = time.monotonic()
+        manager = getattr(self, "license_manager", None)
+        if manager is not None:
+            allowed, limit_value = manager.consume("daily_usage")
+            if not allowed:
+                self.ui.write_log(
+                    f"ARGUS: O limite diário deste plano foi atingido ({limit_value}). "
+                    f"Consulte os planos: {manager.renew_url}"
+                )
+                return False
         outgoing_text = self._current_input_transcript
         if (
             not getattr(self, "_pending_self_quit", False)
@@ -1516,6 +1546,8 @@ class ArgusLive:
         return _load_voice_name()
 
     async def _announce_startup(self):
+        if not getattr(self, "voice_enabled", True):
+            return
         try:
             memory = load_memory()
             name_entry = memory.get("identity", {}).get("name")
@@ -1565,35 +1597,39 @@ class ArgusLive:
             parts.append(mem_str)
         parts.append(sys_prompt)
 
-        return types.LiveConnectConfig(
-            response_modalities=["AUDIO"],
-            output_audio_transcription={},
-            input_audio_transcription={},
-            system_instruction="\n".join(parts),
-            tools=[{
+        config = {
+            "response_modalities": ["AUDIO" if self.voice_enabled else "TEXT"],
+            "system_instruction": "\n".join(parts),
+            "tools": [{
                 "function_declarations": getattr(
                     self,
                     "tool_declarations",
                     TOOL_DECLARATIONS,
                 )
             }],
-            realtime_input_config=types.RealtimeInputConfig(
-                automatic_activity_detection=types.AutomaticActivityDetection(
-                    start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
-                    end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
-                    silence_duration_ms=silence_ms,
-                )
-            ),
-            thinking_config=types.ThinkingConfig(thinking_budget=0),
-            session_resumption=types.SessionResumptionConfig(),
-            speech_config=types.SpeechConfig(
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                        voice_name=self._get_current_voice()
+            "thinking_config": types.ThinkingConfig(thinking_budget=0),
+            "session_resumption": types.SessionResumptionConfig(),
+        }
+        if self.voice_enabled:
+            config.update({
+                "output_audio_transcription": {},
+                "input_audio_transcription": {},
+                "realtime_input_config": types.RealtimeInputConfig(
+                    automatic_activity_detection=types.AutomaticActivityDetection(
+                        start_of_speech_sensitivity=types.StartSensitivity.START_SENSITIVITY_HIGH,
+                        end_of_speech_sensitivity=types.EndSensitivity.END_SENSITIVITY_HIGH,
+                        silence_duration_ms=silence_ms,
+                    )
+                ),
+                "speech_config": types.SpeechConfig(
+                    voice_config=types.VoiceConfig(
+                        prebuilt_voice_config=types.PrebuiltVoiceConfig(
+                            voice_name=self._get_current_voice()
+                        )
                     )
                 )
-            ),
-        )
+            })
+        return types.LiveConnectConfig(**config)
 
     async def _execute_tool(self, fc) -> types.FunctionResponse:
         name = fc.name
@@ -1626,6 +1662,50 @@ class ArgusLive:
                 name=name,
                 response={"result": qa_block_message(qa_decision)},
             )
+
+        manager = getattr(self, "license_manager", None)
+        feature_by_tool = {
+            "web_search": "web_search",
+            "screen_control": "screen_control",
+            "computer_control": "screen_control",
+            "screen_process": "screen_control",
+            "open_app": "screen_control",
+            "desktop_control": "screen_control",
+            "browser_control": "screen_control",
+            "computer_settings": "screen_control",
+        }
+        required_feature = feature_by_tool.get(name)
+        if manager is not None and required_feature and not manager.can(required_feature):
+            return types.FunctionResponse(
+                id=fc.id,
+                name=name,
+                response={
+                    "result": (
+                        f"Este recurso exige um plano com {required_feature}. "
+                        f"A conversa por texto continua disponível. Consulte {manager.renew_url}"
+                    )
+                },
+            )
+        usage_counter = {
+            "web_search": "web_search_daily",
+            "screen_control": "screen_control_daily",
+            "computer_control": "screen_control_daily",
+            "screen_process": "screen_control_daily",
+            "open_app": "screen_control_daily",
+            "desktop_control": "screen_control_daily",
+            "browser_control": "screen_control_daily",
+            "computer_settings": "screen_control_daily",
+        }.get(name)
+        if manager is not None and usage_counter:
+            allowed, limit_value = manager.consume(usage_counter)
+            if not allowed:
+                return types.FunctionResponse(
+                    id=fc.id,
+                    name=name,
+                    response={
+                        "result": f"O limite diário deste recurso foi atingido ({limit_value}). Consulte {manager.renew_url}"
+                    },
+                )
 
         print(f"[ARGUS] 🔧 {name}  {_safe_tool_log_args(args)}")
         self.ui.set_state("THINKING")
@@ -2118,6 +2198,10 @@ class ArgusLive:
         while True:
             if self._shutdown_requested.is_set():
                 return
+            manager = getattr(self, "license_manager", None)
+            if manager is not None:
+                manager.refresh(force=False)
+                self.voice_enabled = bool(manager.can("voice"))
             # enforce runtime limit if configured
             if self.runtime_limit_seconds is not None:
                 elapsed = time.time() - start_time
@@ -2178,15 +2262,21 @@ class ArgusLive:
                             pass
 
                     tg.create_task(self._send_realtime())
-                    if not self.external_audio:
-                        tg.create_task(self._listen_audio())
                     tg.create_task(self._receive_audio())
-                    tg.create_task(self._play_audio())
-                    tg.create_task(self._announce_startup())
+                    if manager is not None:
+                        tg.create_task(self._refresh_license_periodically())
+                    if self.voice_enabled:
+                        if not self.external_audio:
+                            tg.create_task(self._listen_audio())
+                        tg.create_task(self._play_audio())
+                        tg.create_task(self._announce_startup())
 
             except Exception as e:
                 if self._shutdown_requested.is_set():
                     return
+                if getattr(self, "_license_reconnect_requested", False):
+                    self._license_reconnect_requested = False
+                    continue
                 actual = e
                 if isinstance(e, ExceptionGroup) and len(e.exceptions) == 1:
                     actual = e.exceptions[0]
@@ -2215,6 +2305,49 @@ class ArgusLive:
                     print(f"[ARGUS] ⚠️ {e}")
                     traceback.print_exc()
 
+    async def _refresh_license_periodically(self):
+        """Refresh entitlements during long-running live sessions."""
+        manager = getattr(self, "license_manager", None)
+        if manager is None:
+            return
+
+        previous_status = manager.current_status()
+        last_refresh_error = None
+        while not self._shutdown_requested.is_set():
+            await asyncio.sleep(60)
+            if self._shutdown_requested.is_set():
+                return
+
+            try:
+                status = await asyncio.to_thread(manager.refresh, force=False)
+            except Exception as exc:
+                error = str(exc)
+                if error != last_refresh_error:
+                    self.ui.write_log(f"SYS: License refresh unavailable: {error}")
+                    last_refresh_error = error
+                continue
+            last_refresh_error = None
+
+            self.voice_enabled = bool(status.get("entitlements", {}).get("voice"))
+            status_changed = any(
+                status.get(field) != previous_status.get(field)
+                for field in ("state", "plan", "reason", "valid_until")
+            )
+            voice_changed = bool(status.get("entitlements", {}).get("voice")) != bool(
+                previous_status.get("entitlements", {}).get("voice")
+            )
+            if status_changed:
+                self.ui.write_log(f"SYS: {manager.banner()}")
+                previous_status = status
+
+            if voice_changed:
+                session = getattr(self, "session", None)
+                close = getattr(session, "close", None)
+                self._license_reconnect_requested = True
+                if callable(close):
+                    await close()
+                raise RuntimeError("License entitlements changed; reconnecting live session.")
+
 def _configure_console_encoding():
     """Keep Unicode startup messages from crashing legacy Windows consoles."""
     for stream in (sys.stdout, sys.stderr):
@@ -2236,6 +2369,14 @@ def main():
 
         return self_test_main([argument for argument in sys.argv[1:] if argument != "--self-test"])
 
+    from core.license import LicenseManager, handle_license_cli
+
+    command_result = handle_license_cli(sys.argv[1:])
+    if command_result is not None:
+        return command_result
+    license_manager = LicenseManager()
+    license_manager.refresh(force=True)
+
     from core.intro_tts import render_intro_segments_with_live, render_intro_with_live
     from ui import ArgusUI
 
@@ -2244,14 +2385,16 @@ def main():
     if os.environ.get("ARGUS_CLI") != "1" and not running_as_app:
         print("[ARGUS] Please launch with the ARGUS CLI: argus")
         return
-    if not wait_for_startup_claps():
+    if license_manager.can("voice") and not wait_for_startup_claps():
         return
     print("[ARGUS] ⚡ Powering up the interface...")
     try:
         ui = ArgusUI(
             "face.png",
-            intro_tts_renderer=render_intro_with_live,
-            segmented_intro_tts_renderer=render_intro_segments_with_live,
+            intro_tts_renderer=render_intro_with_live if license_manager.can("voice") else None,
+            segmented_intro_tts_renderer=(
+                render_intro_segments_with_live if license_manager.can("voice") else None
+            ),
         )
     except Exception as exc:
         print(f"[ARGUS] ❌ Interface startup failed: {exc}")
@@ -2260,8 +2403,10 @@ def main():
 
     def runner():
         ui.wait_for_api_key()
+        license_manager.refresh(force=False)
+        ui.write_log(f"SYS: {license_manager.banner()}")
         voice_name = _load_voice_name()
-        argus = ArgusLive(ui, voice_name)
+        argus = ArgusLive(ui, voice_name, license_manager=license_manager)
         ui.on_quit_requested = argus.request_shutdown
 
         # Trial/keyword runtime limiting: set via env `ARGUS_TRIAL_KEYWORD`.
