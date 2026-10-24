@@ -103,6 +103,7 @@ def test_login_sends_only_license_key_and_device_id(tmp_path, monkeypatch):
     assert set(captured["body"]) == {"device_id"}
     assert captured["headers"]["x-argus-key"] == API_KEY
     assert captured["headers"]["x-device-id"] == captured["body"]["device_id"]
+    assert manager._read_state()["device_id"] == captured["body"]["device_id"]
     assert captured["timeout"] == 8
     wire_data = json.dumps(captured).lower()
     assert "provider-secret-must-stay-local" not in wire_data

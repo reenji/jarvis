@@ -331,8 +331,8 @@ class LicenseManager:
         key = self.api_key()
         if not key or not self.api_base_url:
             return self.current_status()
-        state = self._read_state()
         device_id = self._device_id()
+        state = self._read_state()
         last_check = _timestamp(state.get("last_checked_at")) or 0
         if not force and time.time() - last_check < REFRESH_INTERVAL_SECONDS:
             return self.current_status()
