@@ -7,7 +7,7 @@ import uuid
 
 import pytest
 
-from core.license import LicenseManager
+from core.license import LICENSE_API_URL, LicenseManager
 
 
 pytest.importorskip("cryptography")
@@ -17,6 +17,18 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 KID = "test-license-key"
 API_KEY = "argus_" + "a" * 64
+
+
+def test_license_api_defaults_to_deployed_endpoint(monkeypatch, tmp_path):
+    monkeypatch.delenv("ARGUS_LICENSE_API_URL", raising=False)
+    manager = LicenseManager(state_path=tmp_path / "license.json")
+    assert manager.api_base_url == LICENSE_API_URL
+
+    monkeypatch.setenv("ARGUS_LICENSE_API_URL", "")
+    assert manager.api_base_url == LICENSE_API_URL
+
+    monkeypatch.setenv("ARGUS_LICENSE_API_URL", "https://license.example.test/functions/v1/license/")
+    assert manager.api_base_url == "https://license.example.test/functions/v1/license"
 
 
 def b64url(value: bytes) -> str:
