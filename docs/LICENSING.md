@@ -1,6 +1,6 @@
 # Argus licensing client
 
-The CLI license client is in `core/license.py`. Configure the service base URL with `ARGUS_LICENSE_API_URL` after the Supabase project and API domain are chosen. The optional `ARGUS_LICENSE_RENEW_URL` controls links shown in status banners.
+The CLI license client is in `core/license.py`. It defaults to the deployed Argus endpoint at `https://iugvqlbyflrqlnninrlg.supabase.co/functions/v1/license`. Set `ARGUS_LICENSE_API_URL` only when using another deployment. The optional `ARGUS_LICENSE_RENEW_URL` controls links shown in status banners.
 
 ## Operator setup
 
@@ -18,4 +18,4 @@ The CLI license client is in `core/license.py`. Configure the service base URL w
 
 The API receives only the Argus license key and the random `device_id`. Provider API keys, prompts, and conversation contents remain local to the application. Tokens are Ed25519 signed, have a maximum 24-hour lifetime, and cannot exceed the plan's validity. The CLI checks for updates hourly during a live session, allows a three-day grace period after token expiration while the paid plan itself remains valid, and falls back to free entitlements after that grace period.
 
-The site owner has not yet set numeric usage caps, prices, manual payment instructions, the production API URL, or the signing-key pair. Until these values are configured and the public key is embedded in a CLI release, paid-license activation is not deploy-ready. Free use works without login or a license server.
+The Supabase schema and both Edge Functions are deployed. Numeric usage caps, prices, and manual payment instructions remain pending. Until the signing-key pair is configured and the public key is embedded in a CLI release, paid-license activation is not ready. Free use works without login or a license server.

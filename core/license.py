@@ -48,6 +48,7 @@ TOKEN_LIFETIME_SECONDS = 24 * 60 * 60
 OFFLINE_GRACE_SECONDS = 3 * 24 * 60 * 60
 REFRESH_INTERVAL_SECONDS = 60 * 60
 RENEW_URL = "https://argusdev.netlify.app/planos/"
+LICENSE_API_URL = "https://iugvqlbyflrqlnninrlg.supabase.co/functions/v1/license"
 KEYRING_SERVICE = "argus"
 KEYRING_ACCOUNT = "license_api_key"
 
@@ -140,7 +141,7 @@ class LicenseManager:
 
     @property
     def api_base_url(self) -> str:
-        return os.environ.get("ARGUS_LICENSE_API_URL", "").strip().rstrip("/")
+        return os.environ.get("ARGUS_LICENSE_API_URL", "").strip().rstrip("/") or LICENSE_API_URL
 
     @property
     def renew_url(self) -> str:
