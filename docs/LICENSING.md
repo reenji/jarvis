@@ -16,6 +16,6 @@ The CLI license client is in `core/license.py`. Configure the service base URL w
 - `argus logout` deactivates the current device when online and removes the local license key and token.
 - `/status` in the Argus conversation displays the status and applies newly refreshed voice access.
 
-The API receives only the Argus license key and the random `device_id`. Provider API keys, prompts, and conversation contents remain local to the application. Tokens are Ed25519 signed, have a maximum 24-hour lifetime, and cannot exceed the plan's validity. The CLI allows a three-day grace period after token expiration while the paid plan itself remains valid; after that it falls back to the free entitlements.
+The API receives only the Argus license key and the random `device_id`. Provider API keys, prompts, and conversation contents remain local to the application. Tokens are Ed25519 signed, have a maximum 24-hour lifetime, and cannot exceed the plan's validity. The CLI checks for updates hourly during a live session, allows a three-day grace period after token expiration while the paid plan itself remains valid, and falls back to free entitlements after that grace period.
 
 The site owner has not yet set numeric usage caps, prices, manual payment instructions, the production API URL, or the signing-key pair. Until these values are configured and the public key is embedded in a CLI release, paid-license activation is not deploy-ready. Free use works without login or a license server.

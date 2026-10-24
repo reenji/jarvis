@@ -241,3 +241,24 @@ def test_refresh_applies_changed_entitlements_from_server_matrix(tmp_path, monke
     assert manager.limit("daily_usage") == 45
 
 
+def test_refresh_checks_the_server_after_one_hour(tmp_path, monkeypatch):
+    calls = 0
+    manager, _private_key = manager_for(tmp_path, monkeypatch)
+    original_opener = manager._opener
+
+    def opener(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        return original_opener(*args, **kwargs)
+
+    manager._opener = opener
+    manager.login(API_KEY)
+    assert calls == 1
+    manager.refresh(force=False)
+    assert calls == 1
+
+    state = manager._read_state()
+    state["last_checked_at"] -= 3601
+    manager._write_state(state)
+    manager.refresh(force=False)
+    assert calls == 2

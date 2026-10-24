@@ -2263,6 +2263,8 @@ class ArgusLive:
 
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._receive_audio())
+                    if manager is not None:
+                        tg.create_task(self._refresh_license_periodically())
                     if self.voice_enabled:
                         if not self.external_audio:
                             tg.create_task(self._listen_audio())
@@ -2272,6 +2274,9 @@ class ArgusLive:
             except Exception as e:
                 if self._shutdown_requested.is_set():
                     return
+                if getattr(self, "_license_reconnect_requested", False):
+                    self._license_reconnect_requested = False
+                    continue
                 actual = e
                 if isinstance(e, ExceptionGroup) and len(e.exceptions) == 1:
                     actual = e.exceptions[0]
@@ -2299,6 +2304,49 @@ class ArgusLive:
                 else:
                     print(f"[ARGUS] ⚠️ {e}")
                     traceback.print_exc()
+
+    async def _refresh_license_periodically(self):
+        """Refresh entitlements during long-running live sessions."""
+        manager = getattr(self, "license_manager", None)
+        if manager is None:
+            return
+
+        previous_status = manager.current_status()
+        last_refresh_error = None
+        while not self._shutdown_requested.is_set():
+            await asyncio.sleep(60)
+            if self._shutdown_requested.is_set():
+                return
+
+            try:
+                status = await asyncio.to_thread(manager.refresh, force=False)
+            except Exception as exc:
+                error = str(exc)
+                if error != last_refresh_error:
+                    self.ui.write_log(f"SYS: License refresh unavailable: {error}")
+                    last_refresh_error = error
+                continue
+            last_refresh_error = None
+
+            self.voice_enabled = bool(status.get("entitlements", {}).get("voice"))
+            status_changed = any(
+                status.get(field) != previous_status.get(field)
+                for field in ("state", "plan", "reason", "valid_until")
+            )
+            voice_changed = bool(status.get("entitlements", {}).get("voice")) != bool(
+                previous_status.get("entitlements", {}).get("voice")
+            )
+            if status_changed:
+                self.ui.write_log(f"SYS: {manager.banner()}")
+                previous_status = status
+
+            if voice_changed:
+                session = getattr(self, "session", None)
+                close = getattr(session, "close", None)
+                self._license_reconnect_requested = True
+                if callable(close):
+                    await close()
+                raise RuntimeError("License entitlements changed; reconnecting live session.")
 
 def _configure_console_encoding():
     """Keep Unicode startup messages from crashing legacy Windows consoles."""
