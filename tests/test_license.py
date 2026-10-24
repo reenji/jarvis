@@ -177,6 +177,24 @@ def test_device_limit_returns_to_free_with_panel_instruction_reason(tmp_path, mo
     assert status["reason"] == "device_limit"
 
 
+def test_login_reports_invalid_key_instead_of_claiming_success(tmp_path, monkeypatch):
+    def opener(request, timeout):
+        raise urllib.error.HTTPError(
+            request.full_url,
+            401,
+            "invalid_key",
+            {},
+            io.BytesIO(b'{"error":"invalid_key"}'),
+        )
+
+    manager, _private_key = manager_for(tmp_path, monkeypatch, opener=opener)
+    from core.license import LicenseAPIError
+
+    with pytest.raises(LicenseAPIError, match="invalid_key"):
+        manager.login(API_KEY)
+    assert manager.api_key() is None
+
+
 def test_invalid_signature_is_rejected_and_uses_free(tmp_path, monkeypatch):
     manager, private_key = manager_for(tmp_path, monkeypatch)
     token = make_token(private_key, signature_override=b"x" * 64)

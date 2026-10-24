@@ -317,7 +317,7 @@ class LicenseManager:
             )
         self._save_api_key(key)
         try:
-            return self.refresh(force=True)
+            return self.refresh(force=True, raise_errors=True)
         except LicenseAPIError as exc:
             if exc.code in {"invalid_key", "revoked"}:
                 self._keyring_delete()
