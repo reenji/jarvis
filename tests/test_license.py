@@ -31,6 +31,19 @@ def test_license_api_defaults_to_deployed_endpoint(monkeypatch, tmp_path):
     assert manager.api_base_url == "https://license.example.test/functions/v1/license"
 
 
+def test_license_defaults_use_the_live_site(monkeypatch, tmp_path):
+    # The CLI talks to the site's /api gateway, never to the backend host directly.
+    monkeypatch.delenv("ARGUS_LICENSE_API_URL", raising=False)
+    monkeypatch.delenv("ARGUS_LICENSE_RENEW_URL", raising=False)
+    manager = LicenseManager(state_path=tmp_path / "license.json")
+    assert manager.api_base_url == "https://argusdev.pages.dev/api/license"
+    assert manager.renew_url == "https://argusdev.pages.dev/planos/"
+    assert "supabase" not in manager.api_base_url
+
+    monkeypatch.setenv("ARGUS_LICENSE_RENEW_URL", "https://example.test/plans/")
+    assert manager.renew_url == "https://example.test/plans/"
+
+
 def b64url(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).decode("ascii").rstrip("=")
 
