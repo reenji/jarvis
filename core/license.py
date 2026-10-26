@@ -48,7 +48,8 @@ TOKEN_LIFETIME_SECONDS = 24 * 60 * 60
 OFFLINE_GRACE_SECONDS = 3 * 24 * 60 * 60
 REFRESH_INTERVAL_SECONDS = 60 * 60
 RENEW_URL = "https://argusdev.netlify.app/planos/"
-LICENSE_API_URL = "https://iugvqlbyflrqlnninrlg.supabase.co/functions/v1/license"
+# Same-origin gateway of the Argus site; it forwards to the license Edge Function.
+LICENSE_API_URL = "https://argusdev.pages.dev/api/license"
 KEYRING_SERVICE = "argus"
 KEYRING_ACCOUNT = "license_api_key"
 
