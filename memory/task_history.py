@@ -2,9 +2,10 @@ import json
 import re
 import time
 from pathlib import Path
+from core.app_paths import data_dir
 from typing import Any
 
-HISTORY_PATH = Path(__file__).resolve().parent / "task_history.json"
+HISTORY_PATH = data_dir() / "memory" / "task_history.json"
 MAX_HISTORY = 100
 
 

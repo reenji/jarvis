@@ -6,6 +6,7 @@ import json
 import sys
 import traceback
 from pathlib import Path
+from core.app_paths import data_dir, resource_dir
 
 import sounddevice as sd
 from google import genai
@@ -70,9 +71,7 @@ local_knowledge = _lazy_action("actions.local_knowledge", "manage_local_knowledg
 
 
 def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent
+    return data_dir()
 
 
 def _load_dotenv():
@@ -88,7 +87,7 @@ def _load_dotenv():
 BASE_DIR        = get_base_dir()
 _load_dotenv()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
-PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
+PROMPT_PATH     = resource_dir() / "core" / "prompt.txt"
 LIVE_MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 CHANNELS            = 1
 SEND_SAMPLE_RATE    = 16000

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from core.app_paths import data_dir
 from typing import List, Optional, Literal
 
 from pydantic import Field, validator
@@ -18,7 +19,7 @@ from pydantic_settings import BaseSettings
 
 from config.user_config import get_configured_gemini_key, load_user_config
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = data_dir()
 
 
 class LLMSettings(BaseSettings):

@@ -14,6 +14,7 @@ import time
 import traceback
 from datetime import datetime
 from pathlib import Path
+from core.app_paths import data_dir, resource_dir
 
 import psutil
 
@@ -62,14 +63,11 @@ from PyQt6.QtWidgets import (
 )
 
 def _base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
-    # This module lives in the ui/ package, but assets and local config live
-    # beside main.py at the project root.
-    return Path(__file__).resolve().parent.parent
+    # Bundled assets (fonts, icon); user config lives in data_dir() instead.
+    return resource_dir()
 
 BASE_DIR   = _base_dir()
-CONFIG_DIR = BASE_DIR / "config"
+CONFIG_DIR = data_dir() / "config"
 API_FILE   = CONFIG_DIR / "api_keys.json"
 FONT_DIR   = BASE_DIR / "assets" / "fonts"
 APP_ICON_FILE = BASE_DIR / "assets" / "argus.ico"

@@ -23,6 +23,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from core.app_paths import data_dir
 from datetime import datetime
 
 from google import genai
@@ -35,7 +36,7 @@ def _get_api_key() -> str:
     if env_key:
         return env_key
 
-    config_path = Path(__file__).resolve().parent.parent / "config" / "api_keys.json"
+    config_path = data_dir() / "config" / "api_keys.json"
     if config_path.exists():
         with open(config_path, "r", encoding="utf-8") as f:
             return json.load(f).get("gemini_api_key", "")
@@ -84,7 +85,7 @@ def _resolve_file_path(file_path: str, player=None) -> Path:
 
     roots = [
         Path.cwd(),
-        Path(__file__).resolve().parent.parent,
+        data_dir(),
         Path.home() / "Desktop",
         Path.home() / "Downloads",
         Path.home() / "Documents",

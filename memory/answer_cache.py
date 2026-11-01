@@ -3,6 +3,7 @@ import re
 import sys
 import time
 from pathlib import Path
+from core.app_paths import data_dir
 
 
 MAX_CACHE_ENTRIES = 200
@@ -10,9 +11,7 @@ MAX_ANSWER_CHARS = 1200
 
 
 def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
+    return data_dir()
 
 
 CACHE_PATH = get_base_dir() / "memory" / "answer_cache.json"

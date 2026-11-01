@@ -11,6 +11,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from core.app_paths import data_dir
 from typing import Callable
 from urllib.parse import urlparse
 
@@ -18,9 +19,7 @@ from memory.config_manager import get_gemini_key
 
 
 def _base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
+    return data_dir()
 
 
 BASE_DIR = _base_dir()
