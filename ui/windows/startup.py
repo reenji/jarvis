@@ -64,7 +64,7 @@ class _MainWindowStartupMixin:
     def __init__(self, face_path: str):
         super().__init__()
         _load_bundled_fonts()
-        self.setWindowTitle("J.A.R.V.I.S — MARK XXXIX")
+        self.setWindowTitle("ARGUS")
         self.setMinimumSize(_MIN_W, _MIN_H)
 
         # Set dark palette so no white leaks through any unstyled widget
