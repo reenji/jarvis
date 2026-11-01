@@ -6,14 +6,13 @@ import json
 import re
 import time
 from pathlib import Path
+from core.app_paths import data_dir
 
 from actions.argus_file_stamp import write_text_with_stamp
 
 
 def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
+    return data_dir()
 
 
 BASE_DIR         = get_base_dir()

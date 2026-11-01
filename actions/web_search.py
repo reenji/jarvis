@@ -6,6 +6,7 @@ import json
 import os
 import sys
 from pathlib import Path
+from core.app_paths import data_dir
 from urllib.parse import urlparse
 
 
@@ -13,9 +14,7 @@ DEFAULT_WEB_SEARCH_MODEL = "gemini-3.8-flash"
 
 
 def _get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
+    return data_dir()
 
 
 BASE_DIR = _get_base_dir()

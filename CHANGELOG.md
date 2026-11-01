@@ -7,6 +7,11 @@ unreleased repository work; it does not imply a published release.
 
 ### Added
 
+- Added macOS (arm64 `.dmg`) and Linux (x86_64 `.deb` and `.tar.gz`) builds
+  to the `Build and release` workflow (formerly `Windows build`), with smoke
+  tests of the installed, read-only app. On macOS and Linux one executable
+  opens the CLI in a terminal and the desktop window otherwise. Version 0.3.0.
+  See [`docs/MACOS_LINUX.md`](docs/MACOS_LINUX.md).
 - Added the Windows app: one PyInstaller bundle with `ARGUS.exe` (desktop)
   and `argus.com` (terminal CLI), a per-user Inno Setup installer, a portable
   zip, and a `Windows build` workflow that publishes both on `v*` tags. See
@@ -27,6 +32,11 @@ unreleased repository work; it does not imply a published release.
 - The Windows desktop app no longer flashes PowerShell or console windows:
   background subprocesses run hidden, and the HUD stops its PowerShell
   temperature probe when it fails and otherwise reads it every 15 s.
+- Packaged builds read bundled files (prompt, fonts, icon) from the bundle and
+  keep `config/`, `memory/`, `outputs/` and `.env` in a per-user data folder:
+  beside `ARGUS.exe` on Windows (unchanged), `~/Library/Application Support/Argus`
+  on macOS, `$XDG_DATA_HOME/argus` (default `~/.local/share/argus`) on Linux.
+  `ARGUS_DATA_DIR` overrides it. Source checkouts still use the repository.
 - New app icon from the pixel-art portrait in `assets/argus-icon.png`, used by
   `ARGUS.exe`, the installer, the desktop window and the tray. The window title,
   tray tooltip and setup screen now say ARGUS instead of J.A.R.V.I.S.

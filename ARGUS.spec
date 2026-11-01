@@ -5,11 +5,18 @@
 #   ARGUS.exe  windowed; a double click opens the desktop assistant
 #   argus.com  console; `argus chat`, `argus setup`, `argus doctor` in a terminal
 # Both run argus_launcher.py. contents_directory='.' keeps config/, core/ and
-# memory/ beside the executables, where the app reads and writes them.
+# memory/ beside the executables, where the Windows app reads and writes them.
+#
+# Linux output (dist/ARGUS/ARGUS) and macOS output (dist/ARGUS.app): one
+# executable; with no arguments it opens the CLI in a terminal and the desktop
+# window otherwise. Their data lives in the user's folder (core/app_paths.py).
 
 import os
 import sys
+import tomllib
 from pathlib import Path
+
+VERSION = tomllib.loads(Path(SPECPATH, 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
 
 APP_PACKAGES = [
     'actions', 'agent', 'audio', 'awareness', 'cli', 'config', 'core',
@@ -116,6 +123,16 @@ if sys.platform == 'darwin':
     app = BUNDLE(
         coll,
         name='ARGUS.app',
-        icon=None,
-        bundle_identifier=None,
+        icon='assets/argus.ico',  # converted to .icns by PyInstaller (needs Pillow)
+        bundle_identifier='io.github.reenji.argus',
+        info_plist={
+            'CFBundleName': 'Argus',
+            'CFBundleDisplayName': 'Argus',
+            'CFBundleShortVersionString': VERSION,
+            'CFBundleVersion': VERSION,
+            'NSHighResolutionCapable': True,
+            # Without these, macOS stops the app when voice or screen tools start.
+            'NSMicrophoneUsageDescription': 'Argus listens to your voice commands.',
+            'NSAppleEventsUsageDescription': 'Argus controls apps you ask it to use.',
+        },
     )

@@ -5,14 +5,13 @@ import subprocess
 import sys
 from datetime import datetime, timedelta
 from pathlib import Path
+from core.app_paths import data_dir
 
 from config import is_windows, is_mac, is_linux
 from actions.argus_file_stamp import write_text_with_stamp
 
 def _get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
+    return data_dir()
 
 
 BASE_DIR        = _get_base_dir()

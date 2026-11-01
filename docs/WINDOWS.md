@@ -47,15 +47,19 @@ the program and its `PATH` entry but leaves those folders; delete the install
 folder by hand to remove them. The terminal CLI also stores settings and
 sessions in its per-user ARGUS home.
 
+Set `ARGUS_DATA_DIR` to keep that data somewhere else. On macOS and Linux the
+app installs read-only, so the same folders live in `~/Library/Application
+Support/Argus` and `~/.local/share/argus` (`core/app_paths.py`).
+
 ## Build it yourself
 
-The `Windows build` workflow (`.github/workflows/windows.yml`) builds on
-`windows-latest` for pull requests that touch packaging, on manual dispatch,
-and on `v*` tags. A tag also publishes the installer and zip as a GitHub
-release:
+The `Build and release` workflow (`.github/workflows/release.yml`) builds
+Windows, macOS and Linux for pull requests that touch packaging, on manual
+dispatch, and on `v*` tags. A tag whose version matches `pyproject.toml`
+also publishes every installer as one GitHub release:
 
 ```bash
-git tag v0.2.0 && git push origin v0.2.0
+git tag v0.3.0 && git push origin v0.3.0
 ```
 
 To build locally on Windows with Python 3.12 and Inno Setup 6:
@@ -63,7 +67,7 @@ To build locally on Windows with Python 3.12 and Inno Setup 6:
 ```powershell
 python -m pip install -r requirements.txt . pyinstaller==6.22.3
 pyinstaller --noconfirm ARGUS.spec
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.2.0 installer\argus.iss
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.3.0 installer\argus.iss
 ```
 
 `dist\ARGUS\` holds the portable app and `dist\ARGUS-windows-x64-setup.exe`
