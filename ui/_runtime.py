@@ -72,6 +72,7 @@ BASE_DIR   = _base_dir()
 CONFIG_DIR = BASE_DIR / "config"
 API_FILE   = CONFIG_DIR / "api_keys.json"
 FONT_DIR   = BASE_DIR / "assets" / "fonts"
+APP_ICON_FILE = BASE_DIR / "assets" / "argus.ico"
 UI_SETTINGS_FILE = Path.home() / ".argus" / "config" / "settings.json"
 LAYOUT_SETTINGS_FILE = Path.home() / ".argus" / "config" / "layout_settings.json"
 

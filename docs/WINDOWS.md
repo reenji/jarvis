@@ -69,5 +69,7 @@ pyinstaller --noconfirm ARGUS.spec
 `dist\ARGUS\` holds the portable app and `dist\ARGUS-windows-x64-setup.exe`
 the installer. File names carry no version, so `releases/latest/download/`
 links keep working; the version shows in the release title and the installer.
-Regenerate the icon with `python scripts/make_windows_icon.py` after changing
-the palette in `design/tokens.json`.
+The app icon is the pixel art in `assets/argus-icon.png` (one image pixel per
+art pixel, square). After changing it, run `python scripts/make_windows_icon.py`
+to rebuild `assets/argus.ico`, which the executables, the installer and the
+desktop window and tray use.

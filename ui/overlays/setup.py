@@ -52,7 +52,7 @@ class SetupOverlay(QWidget):
             return w
 
         layout.addWidget(_lbl("◈  INITIALISATION REQUIRED", TOKENS.font_sizes["legacy_13"], True))
-        layout.addWidget(_lbl("Configure J.A.R.V.I.S. before first boot.", TOKENS.font_sizes["legacy_9"], color=C.PRI_DIM))
+        layout.addWidget(_lbl("Configure ARGUS before first boot.", TOKENS.font_sizes["legacy_9"], color=C.PRI_DIM))
         layout.addSpacing(TOKENS.spacing["legacy_6"])
 
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)

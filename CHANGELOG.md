@@ -24,6 +24,9 @@ unreleased repository work; it does not imply a published release.
 
 ### Changed
 
+- New app icon from the pixel-art portrait in `assets/argus-icon.png`, used by
+  `ARGUS.exe`, the installer, the desktop window and the tray. The window title,
+  tray tooltip and setup screen now say ARGUS instead of J.A.R.V.I.S.
 - The Windows build skips importing pywinauto while PyInstaller probes for DLL
   search paths, which crashed on CI; pywinauto is still bundled.
 - The live session config defaults to voice until license entitlements
