@@ -51,6 +51,8 @@ jobs:
           Write-Output $doctor
           if ($LASTEXITCODE -ne 1) { throw "argus doctor exited $LASTEXITCODE, expected 1" }
           if ($doctor -notmatch "No usable API key found") { throw "doctor did not report the missing key" }
+          # Actions ends pwsh steps with $LASTEXITCODE, which is doctor's expected 1.
+          exit 0
 
       - name: Build installer and portable zip
         run: |
