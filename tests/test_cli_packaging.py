@@ -48,6 +48,11 @@ class CliPackagingMetadataTests(unittest.TestCase):
         self.assertTrue(any(dependency.startswith("fastapi") for dependency in extras["api"]))
         self.assertTrue(any(dependency.startswith("SQLAlchemy") for dependency in extras["api"]))
 
+    def test_bundle_version_fallback_matches_the_package_version(self):
+        from cli import __version__
+
+        self.assertEqual(__version__, self.project["version"])
+
     def test_live_prompt_is_included_in_the_wheel(self):
         self.assertIn("prompt.txt", self.project_package_data("core"))
 

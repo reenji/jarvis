@@ -8,6 +8,7 @@ import os
 import sys
 from collections.abc import Sequence
 
+from cli import __version__
 from cli.history import SessionStore
 
 
@@ -20,7 +21,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="argus",
         description="ARGUS text assistant. Start an interactive session or ask one question.",
     )
-    parser.add_argument("--version", action="version", version="ARGUS CLI 0.1.0")
+    parser.add_argument("--version", action="version", version=f"ARGUS CLI {__version__}")
     parser.add_argument(
         "-q",
         "--question",
