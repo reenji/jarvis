@@ -41,6 +41,12 @@ def _has_console() -> bool:
 
 def _run_desktop(argv: Sequence[str]) -> int:
     os.environ["ARGUS_CLI"] = "1"
+    if not _has_console():
+        # Windowed ARGUS.exe: without this, every PowerShell or nvidia-smi
+        # probe the app runs opens a visible console window.
+        from core.windows_console import hide_child_consoles
+
+        hide_child_consoles()
     rest = list(argv[1:]) if argv and argv[0] in DESKTOP_COMMANDS else list(argv)
     sys.argv = [sys.argv[0], *rest]
     import main as desktop
