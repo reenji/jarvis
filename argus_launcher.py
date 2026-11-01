@@ -9,6 +9,10 @@ The Windows bundle ships two executables built from this script:
 
 ``argus desktop`` opens the desktop window from a terminal, and the windowed
 build hands any CLI arguments to its console sibling in a new console window.
+
+On macOS and Linux one executable serves both: with no arguments it starts
+the CLI in an interactive terminal and the desktop window otherwise (Finder,
+Dock, an app menu entry).
 """
 
 from __future__ import annotations
@@ -24,12 +28,12 @@ DESKTOP_COMMANDS = frozenset({"desktop", "app"})
 CONSOLE_EXECUTABLE = "argus.com"
 
 
-def choose_mode(argv: Sequence[str], *, has_console: bool) -> str:
+def choose_mode(argv: Sequence[str], *, has_console: bool, interactive: bool = True) -> str:
     """Return ``desktop``, ``cli`` or ``relaunch`` for the given arguments."""
     if argv and (argv[0] in DESKTOP_COMMANDS or argv[0] == "--self-test"):
         return "desktop"
     if not argv:
-        return "cli" if has_console else "desktop"
+        return "cli" if has_console and interactive else "desktop"
     # Any other arguments belong to the CLI parser, which reports bad ones.
     return "cli" if has_console else "relaunch"
 
@@ -37,6 +41,12 @@ def choose_mode(argv: Sequence[str], *, has_console: bool) -> str:
 def _has_console() -> bool:
     # PyInstaller windowed builds run without standard streams.
     return sys.stdout is not None
+
+
+def _interactive() -> bool:
+    # Finder, the Dock and app menus start the app with no terminal attached.
+    stdin = sys.stdin
+    return stdin is not None and stdin.isatty()
 
 
 def _run_desktop(argv: Sequence[str]) -> int:
@@ -65,7 +75,9 @@ def _relaunch_in_console(argv: Sequence[str]) -> int:
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = list(sys.argv[1:] if argv is None else argv)
-    mode = choose_mode(args, has_console=_has_console())
+    # Older macOS versions pass a process serial number when Finder opens an app.
+    args = [arg for arg in args if not arg.startswith("-psn_")]
+    mode = choose_mode(args, has_console=_has_console(), interactive=_interactive())
     if mode == "desktop":
         return _run_desktop(args)
     if mode == "relaunch":
