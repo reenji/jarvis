@@ -1,7 +1,8 @@
 ; Inno Setup 6 script for the ARGUS Windows installer.
 ; Build after PyInstaller has produced dist\ARGUS:
-;   iscc /DAppVersion=0.1.0 installer\argus.iss
-; Output: dist\ARGUS-Setup-<version>.exe
+;   iscc /DAppVersion=0.2.0 installer\argus.iss
+; Output: dist\ARGUS-windows-x64-setup.exe (unversioned, so
+; releases/latest/download/ links stay valid across releases)
 ;
 ; Installs per user (no administrator prompt) so the app can keep writing
 ; config\, memory\ and outputs\ beside its executables. Upgrades replace only
@@ -29,7 +30,7 @@ ChangesEnvironment=yes
 SetupIconFile=..\assets\argus.ico
 UninstallDisplayIcon={app}\ARGUS.exe
 OutputDir=..\dist
-OutputBaseFilename=ARGUS-Setup-{#AppVersion}
+OutputBaseFilename=ARGUS-windows-x64-setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern

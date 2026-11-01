@@ -23,7 +23,8 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.12", cache: pip, cache-dependency-path: "requirements*.txt" }
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install -r requirements.txt pyinstaller==6.22.3
+      # "." adds the CLI's base dependencies (rich, prompt-toolkit), which requirements.txt lacks.
+      - run: python -m pip install -r requirements.txt . pyinstaller==6.22.3
       - run: python -m unittest tests.test_argus_launcher
 
       - name: Resolve version
@@ -37,6 +38,11 @@ jobs:
           "value=$version" >> $env:GITHUB_OUTPUT
 
       - run: pyinstaller --noconfirm ARGUS.spec
+      - name: Check the CLI terminal libraries are bundled
+        run: |
+          foreach ($module in "'rich'", "'prompt_toolkit'") {
+            if (-not (Select-String -Path build\ARGUS\PYZ-00.toc -Pattern $module -SimpleMatch -Quiet)) { throw "$module missing from the bundle" }
+          }
 
       - name: Smoke test the console build
         run: |
@@ -62,14 +68,14 @@ jobs:
           }
           & $iscc /DAppVersion=${{ steps.version.outputs.value }} installer\argus.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC exited $LASTEXITCODE" }
-          Compress-Archive -Path dist\ARGUS -DestinationPath dist\ARGUS-${{ steps.version.outputs.value }}-windows-x64.zip
+          Compress-Archive -Path dist\ARGUS -DestinationPath dist\ARGUS-windows-x64-portable.zip
 
       - uses: actions/upload-artifact@v4
         with:
           name: argus-windows-${{ steps.version.outputs.value }}
           path: |
-            dist/ARGUS-Setup-*.exe
-            dist/ARGUS-*-windows-x64.zip
+            dist/ARGUS-windows-x64-setup.exe
+            dist/ARGUS-windows-x64-portable.zip
           if-no-files-found: error
 
   release:
@@ -81,6 +87,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v4
         with: { path: dist, merge-multiple: true }
+      - run: cd dist && sha256sum ARGUS-* > SHA256SUMS.txt
       - run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "Argus $GITHUB_REF_NAME" --generate-notes
         env:
           GH_TOKEN: ${{ github.token }}

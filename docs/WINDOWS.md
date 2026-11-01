@@ -14,14 +14,18 @@ console. `argus desktop` opens the desktop window from a terminal.
 
 ## Install
 
-Download from the latest release on GitHub:
+Download from the [latest release](https://github.com/reenji/jarvis/releases/latest)
+on GitHub:
 
-- `ARGUS-Setup-<version>.exe`: installer. It installs for the current user
+- [`ARGUS-windows-x64-setup.exe`](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-windows-x64-setup.exe): installer. It installs for the current user
   only (no administrator prompt) in `%LOCALAPPDATA%\Programs\Argus`, adds
   Start menu shortcuts, and adds the folder to your user `PATH` so `argus`
   works in new terminals. Uncheck that task to skip the `PATH` change.
-- `ARGUS-<version>-windows-x64.zip`: portable copy. Extract it anywhere you
+- [`ARGUS-windows-x64-portable.zip`](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-windows-x64-portable.zip): portable copy. Extract it anywhere you
   can write to and run `ARGUS.exe` or `argus.com` from that folder.
+
+Each release also lists `SHA256SUMS.txt` to check the downloads against
+(`Get-FileHash <file>` in PowerShell).
 
 The build is not code-signed yet, so SmartScreen may warn on first run. Choose
 **More info → Run anyway**.
@@ -51,17 +55,19 @@ and on `v*` tags. A tag also publishes the installer and zip as a GitHub
 release:
 
 ```bash
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.2.0 && git push origin v0.2.0
 ```
 
 To build locally on Windows with Python 3.12 and Inno Setup 6:
 
 ```powershell
-python -m pip install -r requirements.txt pyinstaller==6.22.3
+python -m pip install -r requirements.txt . pyinstaller==6.22.3
 pyinstaller --noconfirm ARGUS.spec
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.1.0 installer\argus.iss
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.2.0 installer\argus.iss
 ```
 
-`dist\ARGUS\` holds the portable app and `dist\ARGUS-Setup-0.1.0.exe` the
-installer. Regenerate the icon with `python scripts/make_windows_icon.py`
-after changing the palette in `design/tokens.json`.
+`dist\ARGUS\` holds the portable app and `dist\ARGUS-windows-x64-setup.exe`
+the installer. File names carry no version, so `releases/latest/download/`
+links keep working; the version shows in the release title and the installer.
+Regenerate the icon with `python scripts/make_windows_icon.py` after changing
+the palette in `design/tokens.json`.
