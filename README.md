@@ -4,6 +4,10 @@ Local Gemini Live desktop assistant with a PyQt6 interface, voice interaction, d
 
 ARGUS is the product name; its source repository is [`reenji/jarvis`](https://github.com/reenji/jarvis).
 
+[![Download ARGUS for Windows](https://img.shields.io/badge/Download-Windows%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-windows-x64-setup.exe)
+[![Portable zip](https://img.shields.io/badge/Portable-zip-00c8ff?style=for-the-badge)](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-windows-x64-portable.zip)
+[![All releases](https://img.shields.io/github/v/release/reenji/jarvis?style=for-the-badge&label=release)](https://github.com/reenji/jarvis/releases/latest)
+
 ARGUS also includes a dedicated presentation studio that creates, edits,
 redesigns, and extends editable widescreen `.pptx` decks from documents, data,
 images, audio, and video, with optional PDF export. See the
@@ -25,9 +29,10 @@ QA environment.
 
 ## Windows app
 
-On Windows 10 or 11, download `ARGUS-Setup-<version>.exe` (or the portable
-zip) from the latest GitHub release. It installs `ARGUS.exe` for the desktop
-assistant and the `argus` terminal command, without Python. See
+On Windows 10 or 11, download the [installer](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-windows-x64-setup.exe)
+or the [portable zip](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-windows-x64-portable.zip) from the latest
+release. It installs `ARGUS.exe` for the desktop assistant and the `argus`
+terminal command, without Python. See
 [docs/WINDOWS.md](docs/WINDOWS.md).
 
 ## Quick start (Windows, macOS, Linux)
