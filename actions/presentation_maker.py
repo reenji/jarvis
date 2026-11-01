@@ -13,6 +13,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from core.app_paths import data_dir
 from typing import Any, Callable
 
 from actions.argus_file_stamp import generated_by, mark_created_file
@@ -41,7 +42,7 @@ from actions.presentations.quality import (
 from actions.presentations.sources import ingest_sources, source_manifest
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = data_dir()
 API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 DEFAULT_MODEL = "gemini-2.5-flash"
 PRESENTATION_PENDING_TTL_SECONDS = 15 * 60

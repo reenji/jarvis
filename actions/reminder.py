@@ -5,13 +5,12 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from core.app_paths import data_dir
 
 from actions.argus_file_stamp import mark_created_file, write_text_with_stamp
 
 def _base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
+    return data_dir()
 
 
 def _get_os() -> str:

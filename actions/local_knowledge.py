@@ -9,6 +9,7 @@ import sys
 import time
 from html.parser import HTMLParser
 from pathlib import Path
+from core.app_paths import data_dir
 from typing import Iterable
 
 
@@ -58,9 +59,7 @@ class _TextExtractor(HTMLParser):
 
 
 def _base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
+    return data_dir()
 
 
 def _database_path(base_dir: Path | None = None) -> Path:
