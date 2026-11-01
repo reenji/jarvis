@@ -6,6 +6,8 @@ import os
 import ctypes
 from dataclasses import dataclass
 
+from actions.screen_control.safety import is_blocked_process, is_blocked_terminal_window
+
 
 @dataclass(frozen=True)
 class WindowInfo:
@@ -57,6 +59,8 @@ def get_active_window(*, allow_argus: bool = False) -> WindowInfo:
             process_name = psutil.Process(process_id).name()
         except (psutil.Error, OSError):
             process_name = ""
+        if is_blocked_terminal_window(title, process_name):
+            raise RuntimeError("A janela do terminal é protegida e não pode ser alvo do controle de tela.")
         if not allow_argus and (
             process_id == os.getpid()
             or process_name.casefold() in _ARGUS_PROCESS_NAMES
@@ -90,7 +94,12 @@ def bring_to_front(title_or_process: str) -> bool:
                 process = psutil.Process(pid).name().casefold()
             except Exception:
                 process = ""
-            if process == "argus.exe" or "argus" in title:
+            if (
+                is_blocked_process(process)
+                or is_blocked_terminal_window(title, process)
+                or process == "argus.exe"
+                or "argus" in title
+            ):
                 return
             process_stem = process.removesuffix(".exe")
             target_stem = target.removesuffix(".exe")

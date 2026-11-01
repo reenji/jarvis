@@ -1,0 +1,32 @@
+# CLI migration status
+
+Repository: reenji/jarvis
+Active branch: feat/cli-terminal-parity (stacked on feat/cli-parity)
+Migration plan source: attached PDF, reviewed before implementation.
+
+## Progress
+
+| Phase | Status | Notes |
+|---|---|---|
+| 0. Repository inventory | Complete | Documentation only; no runtime code changed. |
+| 1. Core boundaries | Complete | Split required conversation events from optional desktop controls; keep adapter compatibility. |
+| 2. Text CLI and sessions | Complete | Adds ASCII eye branding with visibility controls, Rich streaming, tool lines, `-q`/`--continue`/`--resume`, `--voice`/`/voice`, private prompt history, slash completion, and clean cancellation/exit behavior. Focused CLI tests pass; the full pre-removal suite remains pending. |
+| 3. Setup, configuration, and doctor | Implemented | Adds hidden-key setup, private user config, redacted config commands, and local/API diagnostics. Clean-install verification depends on Phase 6 packaging. PR is stacked on Phase 2. |
+| 4. Desktop tools | Implemented; desktop validation pending | Bounded Windows screen control, terminal protection, app focus delay, sensitive-share guard, anti-bot stop, and opt-in local debug screenshots. |
+| 5. Optional voice | Implemented; live hardware validation pending | Adds Gemini Live terminal mode, saved default-mode preference, full-turn transcripts, lazy audio loading, and text fallback when audio support or devices are unavailable. |
+| 6. Packaging and installation | Implemented; local clean-wheel validation passed; hosted CI pending | Adds dependency extras, GitHub-based pipx/uv installers for macOS/Linux and Windows, and an isolated wheel smoke check. Keeps hosted API/web manifests and deployment workflows. |
+| 7. Retire the desktop app | Pending | Only after the replacement CLI is usable and verified. |
+| 8. Final tests, CI, and documentation | In progress before Phase 7 | Packaging CI gate is added; full pre-removal suite, hosted CI, and manual desktop/voice validation remain. |
+
+## Execution rules
+
+- One pull request per coherent change.
+- Each feature pull request contains exactly five meaningful commits.
+- Each bug-fix pull request contains exactly three meaningful commits.
+- Feature branches use feat/slug; bug-fix branches use bugfix/slug.
+- Dependent pull requests may be stacked on the preceding open branch, with the base recorded in each PR.
+- Do not create the app-final tag until the last commit containing the desktop app is known and the removal phase is ready.
+
+## Phase 0 result
+
+The repository inventory and migration decisions are committed on feat/cli-inventory. Phase 0 changed documentation only; Phase 1 defines adapter boundaries and retains the desktop and hosted clients. Phase 2 now meets its CLI, session, banner, voice-switch, and cancellation requirements. Phase 3 adds setup, configuration, and doctor in its own feature PR. Phase 4 adds bounded Windows screen interaction and safety behavior; real desktop validation remains pending. Phase 5 adds optional Gemini Live voice mode; real microphone and speaker validation remains pending. Phase 6 packaging is implemented on feat/cli-packaging and awaits hosted CI. Phase 7 remains deferred until the full pre-removal suite and manual validation gates pass.

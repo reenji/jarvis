@@ -442,10 +442,11 @@ class FirstRunIntroOverlay(QWidget):
         self._skip_button.setMinimumSize(184, 42)
         self._skip_button.setCursor(Qt.CursorShape.PointingHandCursor)
         colors = _ui_symbol("C")
-        if colors is not None:
+        tokens = _ui_symbol("TOKENS")
+        if colors is not None and tokens is not None:
             self._skip_button.setStyleSheet(f"""
                 QPushButton {{ background: {colors.BG}; color: {colors.PRI};
-                    border: 1px solid {colors.PRI_DIM}; border-radius: 5px; padding: 0 14px; }}
+                    border: 1px solid {colors.PRI_DIM}; border-radius: {tokens.radii['control']}px; padding: {tokens.spacing['legacy_0']}px {tokens.spacing['legacy_14']}px; }}
                 QPushButton:hover {{ background: {colors.PRI_GHO}; border-color: {colors.PRI}; }}
                 QPushButton:focus {{ border: 2px solid {colors.PRI}; }}
             """)

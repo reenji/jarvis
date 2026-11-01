@@ -1,0 +1,124 @@
+"""Interactive prompt history and slash-command completion."""
+
+from __future__ import annotations
+
+import inspect
+import os
+import sys
+from pathlib import Path
+from typing import Any
+
+from cli.history import default_database_path
+
+SLASH_COMMANDS = (
+    "/help",
+    "/status",
+    "/tools",
+    "/theme",
+    "/profile",
+    "/new",
+    "/sessions",
+    "/voice",
+    "/doctor",
+    "/resume",
+    "/clear",
+    "/delete",
+    "/exit",
+    "/quit",
+)
+
+
+def default_prompt_history_path() -> Path:
+    return default_database_path().with_name("prompt-history")
+
+
+def _secure_history_path(path: Path) -> None:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        os.chmod(path.parent, 0o700)
+        if path.exists():
+            os.chmod(path, 0o600)
+    except OSError:
+        # Windows relies on the user's profile ACL.
+        pass
+
+
+def create_slash_completer():
+    from prompt_toolkit.completion import WordCompleter
+
+    return WordCompleter(SLASH_COMMANDS, ignore_case=True, sentence=True)
+
+
+class InteractivePrompt:
+    """Reuse one prompt-toolkit session for arrow-key history and completion."""
+
+    def __init__(
+        self,
+        *,
+        history_path: str | Path | None = None,
+        session_factory=None,
+        interactive: bool | None = None,
+        prompt_color: str = "#4dd0e1",
+    ) -> None:
+        self.history_path = Path(history_path) if history_path else default_prompt_history_path()
+        self._session_factory = session_factory
+        self._interactive = interactive
+        self._session: Any | None = None
+        self._prompt_color = prompt_color
+
+    @staticmethod
+    def _create_session(history_path: Path):
+        from prompt_toolkit import PromptSession
+        from prompt_toolkit.history import FileHistory, InMemoryHistory
+        from prompt_toolkit.styles import Style
+
+        _secure_history_path(history_path)
+        try:
+            history = FileHistory(str(history_path))
+        except OSError:
+            history = InMemoryHistory()
+        return PromptSession(
+            history=history,
+            completer=create_slash_completer(),
+            complete_while_typing=True,
+            style=Style.from_dict({"prompt": "#e1b753 bold"}),
+        )
+
+    def prompt(self, message: str) -> str:
+        interactive = self._interactive
+        if interactive is None:
+            interactive = bool(sys.stdin.isatty() and sys.stdout.isatty())
+        if not interactive:
+            return input(message)
+
+        if self._session is None:
+            factory = self._session_factory or self._create_session
+            _secure_history_path(self.history_path)
+            try:
+                self._session = factory(self.history_path)
+            except ImportError:
+                return input(message)
+        try:
+            from prompt_toolkit.styles import Style
+
+            style = Style.from_dict({"prompt": f"{self._prompt_color} bold"})
+            prompt_method = self._session.prompt
+            try:
+                parameters = inspect.signature(prompt_method).parameters.values()
+                accepts_style = any(
+                    parameter.name == "style"
+                    or parameter.kind is inspect.Parameter.VAR_KEYWORD
+                    for parameter in parameters
+                )
+            except (TypeError, ValueError):
+                accepts_style = True
+            prompt_args = [("class:prompt", message)]
+            if accepts_style:
+                return str(prompt_method(prompt_args, style=style))
+            return str(prompt_method(prompt_args))
+        finally:
+            _secure_history_path(self.history_path)
+
+    def set_theme_color(self, color: str) -> None:
+        """Apply the selected terminal accent to the next interactive prompt."""
+        self._prompt_color = color

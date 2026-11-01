@@ -20,7 +20,18 @@ _SECRET_CONTENT = re.compile(
 )
 _BLOCKED_PROCESSES = {
     "cmd.exe", "powershell.exe", "pwsh.exe", "windowsterminal.exe", "wt.exe",
-    "bash.exe", "wsl.exe", "terminal", "iterm2", "visual studio code", "code.exe",
+    "conhost.exe", "openconsole.exe", "bash.exe", "wsl.exe", "terminal",
+    "terminal.app", "iterm2", "gnome-terminal", "gnome-terminal-server",
+    "konsole", "xterm", "urxvt", "alacritty", "kitty", "tilix",
+    "wezterm", "wezterm-gui", "foot", "contour", "rio", "tabby", "hyper",
+    "visual studio code", "code.exe",
+}
+_BLOCKED_TARGETS = {
+    "cmd", "command prompt", "powershell", "windows powershell", "pwsh",
+    "windows terminal", "terminal", "console", "bash", "zsh", "fish",
+    "wsl", "iterm", "iterm2", "gnome terminal", "konsole", "xterm",
+    "alacritty", "kitty", "tilix", "wezterm", "foot", "visual studio code",
+    "vscode", "code",
 }
 
 
@@ -47,7 +58,23 @@ def sensitive_file_reason(path_or_name: str) -> str | None:
 
 
 def is_blocked_process(process_name: str) -> bool:
-    return str(process_name or "").casefold().strip() in _BLOCKED_PROCESSES
+    process = str(process_name or "").casefold().strip()
+    return process in _BLOCKED_PROCESSES or process.removesuffix(".exe") in _BLOCKED_PROCESSES
+
+
+def is_blocked_terminal_window(title: str, process_name: str = "") -> bool:
+    if is_blocked_process(process_name):
+        return True
+    normalized = " ".join(str(title or "").casefold().split())
+    return any(marker in normalized for marker in (
+        "windows terminal", "command prompt", "powershell", "cmd.exe",
+        "terminal.app", "iterm2", "gnome-terminal", "konsole",
+    )) or normalized.startswith(("terminal", "bash -", "zsh -", "fish -"))
+
+
+def is_blocked_terminal_target(value: str) -> bool:
+    target = " ".join(str(value or "").casefold().replace(".exe", "").split())
+    return target in _BLOCKED_TARGETS
 
 
 class AbortController:

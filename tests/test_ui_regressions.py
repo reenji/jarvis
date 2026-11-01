@@ -19,6 +19,7 @@ import ui
 from core import intro_tts
 from ui.hud.orb import ActivityVisualizer, ReactorOrb
 from ui.motion import resolve_reduced_motion
+from ui.theme.tokens import TOKENS
 
 
 class _NoSecrets:
@@ -409,6 +410,15 @@ class UIRegressionTests(unittest.TestCase):
         overlay.finish()
         overlay.finish()
         self.assertEqual(emissions, [True])
+        overlay.deleteLater()
+
+    def test_intro_skip_button_styles_keep_token_geometry(self):
+        overlay = ui.FirstRunIntroOverlay(duration_s=1.0, speak=False)
+        style = overlay._skip_button.styleSheet()
+
+        self.assertIn(f"border-radius: {TOKENS.radii['control']}px", style)
+        self.assertIn(f"padding: {TOKENS.spacing['legacy_0']}px {TOKENS.spacing['legacy_14']}px", style)
+        overlay.finish()
         overlay.deleteLater()
 
     def test_live_intro_reveals_the_real_console_widgets_in_sequence(self):
@@ -861,9 +871,12 @@ class UIRegressionTests(unittest.TestCase):
         self.assertEqual(client.aio.models.generate_content.await_count, 1)
 
     def test_time_aware_greeting_boundaries(self):
-        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 5)).startswith("Good morning."))
-        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 12)).startswith("Good afternoon."))
-        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 18)).startswith("Good evening."))
+        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 4, 59)).startswith("Boa noite."))
+        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 5)).startswith("Bom dia."))
+        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 11, 59)).startswith("Bom dia."))
+        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 12)).startswith("Boa tarde."))
+        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 17, 59)).startswith("Boa tarde."))
+        self.assertTrue(ui._daily_greeting(datetime(2026, 1, 1, 18)).startswith("Boa noite."))
 
     def test_full_tour_is_chaptered_for_a_ninety_second_delivery(self):
         chapters = ui._tour_chapters(datetime(2026, 1, 1, 19))

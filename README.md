@@ -2,6 +2,8 @@
 
 Local Gemini Live desktop assistant with a PyQt6 interface, voice interaction, detachable panels, and optional browser, file, screen, and messaging tools.
 
+ARGUS is the product name; its source repository is [`reenji/jarvis`](https://github.com/reenji/jarvis).
+
 ARGUS also includes a dedicated presentation studio that creates, edits,
 redesigns, and extends editable widescreen `.pptx` decks from documents, data,
 images, audio, and video, with optional PDF export. See the
@@ -25,9 +27,15 @@ QA environment.
 
 In Terminal, run:
 
+> **Computer control is enabled by default.** ARGUS can use mouse and keyboard
+> input to carry out clear requests without asking before each click or keystroke.
+> Turn it off under **Settings → Actions** (**Configurações → Ações**), and read
+> the [computer-control terms](docs/TERMS.md).
+> The same controls are available from the `argus` terminal command.
+
 ```bash
-git clone https://github.com/anonymandk/argus.git
-cd argus
+git clone https://github.com/reenji/jarvis.git
+cd jarvis
 python scripts/setup_argus.py
 ```
 
@@ -45,13 +53,13 @@ then type `argus`.
 ARGUS's core UI, Gemini connection, presentations, research, files, and CLI are
 cross-platform. Some computer-control, email, media, and browser integrations
 depend on permissions and available applications on each operating system.
-O controle direto do mouse e do teclado fica ativado por padrão para que o ARGUS
-conclua ações solicitadas sem pedir confirmação para cada clique ou tecla. Ele
-pode ser desativado em **Configurações → Ações**. Leia os [termos de controle do computador](docs/TERMS.md).
+Direct mouse and keyboard control is enabled by default so ARGUS can complete
+requested tasks without asking for approval for each click or keystroke. You can
+disable it in **Settings → Actions**. Read the [computer-control terms](docs/TERMS.md).
 
-O ARGUS pode abrir aplicativos pelo nome e executar tarefas visuais neles. Em
-pedidos com vários passos, ele abre ou foca o aplicativo, interage com seus
-controles e verifica o resultado; veja a [comparação com OpenJarvis](docs/OPENJARVIS_COMPARISON.md).
+ARGUS can open applications by name and perform visual tasks in them. For
+multi-step requests, it opens or focuses the app, interacts with its controls,
+and checks the result; see the [OpenJarvis comparison](docs/OPENJARVIS_COMPARISON.md).
 
 ## Local document knowledge
 
@@ -147,6 +155,29 @@ Open a new terminal (or reload your shell profile), then start ARGUS with:
 ```bash
 argus
 ```
+
+The interactive command opens a terminal dashboard with the current session,
+model, workspace, and available actions. Its theme and display names are saved
+in the current operating system user's Argus configuration, so each computer
+account can keep its own terminal identity and colors. Change them in-session:
+
+```text
+/theme cyan                 # cyan, amber, matrix, or mono
+/profile assistant "My Argus"
+/profile user "My Name"
+```
+
+The same preferences can be set without opening a chat:
+
+```bash
+argus config set terminal.theme cyan
+argus config set terminal.assistant_name "My Argus"
+argus config set terminal.user_name "My Name"
+```
+
+Use `/status` to inspect the current session, `/tools` to list the available
+actions, and `/help` to see the remaining commands. Run `argus --no-banner` to
+start a compact session without the dashboard.
 
 Before packaging or releasing the desktop app, run the side-effect-safe
 capability audit:

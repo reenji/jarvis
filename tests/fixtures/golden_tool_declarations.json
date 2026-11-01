@@ -67,7 +67,7 @@
   },
   {
     "name": "browser_control",
-    "description": "Controls a browser session for explicit browser tasks. Use web_search for ordinary internet research. Use screen_control when the user asks to operate a browser window visible on the desktop. If a requested browser is unavailable, it selects an installed browser. When that browser is already running, ARGUS uses its own profile to avoid locking the user's active session; when it is closed, ARGUS can use its saved profile.",
+    "description": "Controls a browser session for explicit browser tasks. Use web_search for ordinary internet research. Use screen_control when the user asks to operate a browser window visible on the desktop. If a requested browser is unavailable, it selects an installed browser. When that browser is already running, ARGUS uses its own profile to avoid locking the user's active session; when it is closed, ARGUS can use its saved profile. If a search engine presents an anti-robot verification, stop and report it; never interact with or bypass the challenge.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -431,7 +431,7 @@
   },
   {
     "name": "deep_research",
-    "description": "Runs rigorous, multi-query web research and keeps the report in volatile memory unless the user asks to save it. Use when the user explicitly asks for deep, thorough, comprehensive, or source-backed research. On the first call, ask whether the user wants a background status bar or visible browser research. After completion, use this tool again to save the latest report or read it aloud.",
+    "description": "Runs rigorous, multi-query web research and keeps the report in volatile memory unless the user asks to save it. Use when the user explicitly asks for deep, thorough, comprehensive, or source-backed research. On the first call, ask whether the user wants a background status bar or visible browser research. After completion, use this tool again to save the latest report or read it aloud. Search uses Gemini Google Search grounding and does not scrape DuckDuckGo/Bing or repeat queries through Google in a browser; visible mode opens only cited sources.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -1023,7 +1023,7 @@
   },
   {
     "name": "screen_control",
-    "description": "Inspect the focused desktop app or complete a multi-step task in its visible interface. Use action=inspect only when asked what is on screen. Use action=act for any requested on-screen interaction. If the requested app is not open, provide its name in window_title; if omitted, infer a common app named in the goal. ARGUS opens it, confirms focus, then uses Windows accessibility controls first and visual targeting when needed and verifies each step. Follow the user's explicit request without asking for per-click or per-message confirmation. Ask only if the target is genuinely ambiguous or if a file about to be shared appears to contain secrets or sensitive configuration.",
+    "description": "Inspect the focused desktop app or complete a multi-step task in its visible interface. Use action=inspect only when asked what is on screen. Use action=act for any requested on-screen interaction. If the requested app is not open, provide its name in window_title; if omitted, infer a common app named in the goal. ARGUS opens it, confirms focus, then uses Windows accessibility controls first and visual targeting when needed and verifies each step. Direct mouse and keyboard control is enabled by default. Complete clear requests without asking the user to click, select, or approve individual steps; choose the best matching visible result when the request identifies the target. Follow the user's explicit request without asking for per-click or per-message confirmation. Ask only if the target is genuinely ambiguous or if a file about to be shared appears to contain secrets or sensitive configuration.",
     "parameters": {
       "type": "OBJECT",
       "properties": {
@@ -1138,7 +1138,7 @@
   },
   {
     "name": "web_search",
-    "description": "Searches the web for any information. Use immediately when the user asks to search, look up, or research online; the request itself authorizes the search, so do not ask for a second confirmation. Use screen_control only when the user specifically asks to search in or operate a visible browser.",
+    "description": "Searches through Gemini Google Search grounding and returns cited URLs. Use immediately for ordinary online searches. It makes no direct search-engine scraping requests and does not open a browser. If search fails, report the error; do not call another search tool automatically. Use screen_control only when the user specifically asks to search in or operate a visible browser.",
     "parameters": {
       "type": "OBJECT",
       "properties": {

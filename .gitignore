@@ -34,6 +34,7 @@ htmlcov/
 .env
 .env.*
 !.env.example
+.argus/
 
 # If your app uses this JSON for local config/secrets
 config/api_keys.json
@@ -84,6 +85,7 @@ outputs/
 *.sixth/
 
 # Local backup snapshots / experiments
+*.bak
 *.before_*
 *.broken_*
 *.before_remove

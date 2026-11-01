@@ -20,6 +20,7 @@ class ScreenConfig:
     max_steps: int = 12
     max_seconds: float = 60.0
     settle_delay: float = 0.6
+    focus_delay: float = 0.75
     mouse_move_duration: float = 0.2
     debug_screenshots: bool = False
     dry_run: bool = False
@@ -33,6 +34,7 @@ class ScreenConfig:
             max_steps=int(_number("ARGUS_SCREEN_MAX_STEPS", cls.max_steps, 1, 30)),
             max_seconds=_number("ARGUS_SCREEN_MAX_SECONDS", cls.max_seconds, 5, 180),
             settle_delay=_number("ARGUS_SCREEN_SETTLE_DELAY", cls.settle_delay, 0.1, 5),
+            focus_delay=_number("ARGUS_SCREEN_FOCUS_DELAY", cls.focus_delay, 0, 10),
             mouse_move_duration=_number("ARGUS_SCREEN_MOUSE_DURATION", cls.mouse_move_duration, 0, 1),
             debug_screenshots=os.environ.get("ARGUS_DEBUG_SCREENSHOTS", "false").strip().lower() in {"1", "true", "yes", "on"},
             dry_run=os.environ.get("ARGUS_SCREEN_DRY_RUN", "false").strip().lower() in {"1", "true", "yes", "on"},
