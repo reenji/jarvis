@@ -2,13 +2,12 @@ import json
 from datetime import datetime
 from threading import Lock
 from pathlib import Path
+from core.app_paths import data_dir
 import sys
 
 
 def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
+    return data_dir()
 
 
 BASE_DIR         = get_base_dir()

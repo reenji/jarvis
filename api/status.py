@@ -1,8 +1,9 @@
 import json
 from pathlib import Path
+from core.app_paths import data_dir
 from datetime import datetime
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = data_dir()
 STATUS_PATH = ROOT / "tmp" / "argus_status.json"
 
 
