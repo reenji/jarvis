@@ -47,6 +47,10 @@ the program and its `PATH` entry but leaves those folders; delete the install
 folder by hand to remove them. The terminal CLI also stores settings and
 sessions in its per-user ARGUS home.
 
+Set `ARGUS_DATA_DIR` to keep that data somewhere else. On macOS and Linux the
+app installs read-only, so the same folders live in `~/Library/Application
+Support/Argus` and `~/.local/share/argus` (`core/app_paths.py`).
+
 ## Build it yourself
 
 The `Windows build` workflow (`.github/workflows/windows.yml`) builds on
