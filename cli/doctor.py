@@ -31,7 +31,9 @@ def argus_version() -> str:
     try:
         return importlib.metadata.version("argus-mark-xxxix")
     except importlib.metadata.PackageNotFoundError:
-        return "0.1.0"
+        from cli import __version__
+
+        return __version__
 
 
 def _python_check() -> DoctorCheck:

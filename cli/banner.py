@@ -25,7 +25,7 @@ def banner_details() -> tuple[str, str]:
     try:
         package_version = version("argus-mark-xxxix")
     except PackageNotFoundError:
-        package_version = "0.1.0"
+        from cli import __version__ as package_version
 
     try:
         from config.settings import get_settings
