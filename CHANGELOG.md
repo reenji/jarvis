@@ -19,6 +19,9 @@ unreleased repository work; it does not imply a published release.
 
 ### Changed
 
+- The license client calls the Argus site gateway (`https://argusdev.pages.dev/api/license`)
+  instead of the backend host, and renewal links point to `https://argusdev.pages.dev/planos/`.
+  `ARGUS_LICENSE_API_URL` and `ARGUS_LICENSE_RENEW_URL` still override both.
 - Updated the README clone command to use `anonymandk/argus` and added desktop
   and web previews.
 - Rewrote `DESIGN.md` to describe the implemented shared tokens, layouts,
