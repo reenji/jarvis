@@ -19,6 +19,8 @@ unreleased repository work; it does not imply a published release.
 
 ### Changed
 
+- The live session config defaults to voice until license entitlements
+  load, instead of failing when `voice_enabled` is not set yet.
 - The license client calls the Argus site gateway (`https://argusdev.pages.dev/api/license`)
   instead of the backend host, and renewal links point to `https://argusdev.pages.dev/planos/`.
   `ARGUS_LICENSE_API_URL` and `ARGUS_LICENSE_RENEW_URL` still override both.

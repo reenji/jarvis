@@ -1587,6 +1587,8 @@ class ArgusLive:
     def _build_config(self) -> types.LiveConnectConfig:
         from datetime import datetime
 
+        # Voice stays on until entitlements say otherwise, as in _announce_startup.
+        voice_enabled = getattr(self, "voice_enabled", True)
         preferences = load_voice_preferences()
         silence_ms = normalize_silence_ms(preferences.get("vad_silence_ms", LIVE_VAD_SILENCE_MS))
         memory     = load_memory()
@@ -1615,7 +1617,7 @@ class ArgusLive:
         parts.append(sys_prompt)
 
         config = {
-            "response_modalities": ["AUDIO" if self.voice_enabled else "TEXT"],
+            "response_modalities": ["AUDIO" if voice_enabled else "TEXT"],
             "system_instruction": "\n".join(parts),
             "tools": [{
                 "function_declarations": getattr(
@@ -1627,7 +1629,7 @@ class ArgusLive:
             "thinking_config": types.ThinkingConfig(thinking_budget=0),
             "session_resumption": types.SessionResumptionConfig(),
         }
-        if self.voice_enabled:
+        if voice_enabled:
             config.update({
                 "output_audio_transcription": {},
                 "input_audio_transcription": {},
