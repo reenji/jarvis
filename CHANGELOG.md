@@ -10,7 +10,8 @@ unreleased repository work; it does not imply a published release.
 - Added the Windows app: one PyInstaller bundle with `ARGUS.exe` (desktop)
   and `argus.com` (terminal CLI), a per-user Inno Setup installer, a portable
   zip, and a `Windows build` workflow that publishes both on `v*` tags. See
-  [`docs/WINDOWS.md`](docs/WINDOWS.md).
+  [`docs/WINDOWS.md`](docs/WINDOWS.md). Version 0.2.0; the CLI reads its version
+  from `cli.__version__` when package metadata is absent.
 - Reorganized the PyQt desktop interface into the `ui/` package while retaining
   its public import surface.
 - Added a shared token source for desktop and web, with event adapters and
