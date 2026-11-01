@@ -7,6 +7,9 @@ import importlib
 _runtime = importlib.import_module("ui._runtime")
 globals().update({key: value for key, value in vars(_runtime).items() if not key.startswith("__")})
 
+WINDOWS_TEMP_INTERVAL = 15.0
+
+
 class _SysMetrics:
     def __init__(self):
         self.cpu  = 0.0
@@ -17,6 +20,12 @@ class _SysMetrics:
         self._lock = threading.Lock()
         self._last_net = psutil.net_io_counters()
         self._last_net_t = time.time()
+        # Windows reads temperature through PowerShell/WMI, which most PCs
+        # deny without admin rights. Stop asking once it fails, and refresh at
+        # most every WINDOWS_TEMP_INTERVAL seconds when it works.
+        self._win_temp_available = True
+        self._win_temp_value = -1.0
+        self._win_temp_read_at = 0.0
         self._running = True
         t = threading.Thread(target=self._loop, daemon=True)
         t.start()
@@ -177,18 +186,30 @@ class _SysMetrics:
                 pass
 
         if _OS == "Windows":
-            try:
-                r = subprocess.run(
-                    ["powershell", "-Command",
-                     "(Get-WmiObject MSAcpi_ThermalZoneTemperature -Namespace root/wmi).CurrentTemperature"],
-                    capture_output=True, text=True, timeout=3
-                )
-                if r.returncode == 0 and r.stdout.strip():
-                    raw = float(r.stdout.strip().split("\n")[0])
-                    return (raw / 10.0) - 273.15
-            except Exception:
-                pass
+            return self._get_windows_temp()
 
+        return -1.0
+
+    def _get_windows_temp(self) -> float:
+        if not self._win_temp_available:
+            return -1.0
+        now = time.time()
+        if self._win_temp_read_at and now - self._win_temp_read_at < WINDOWS_TEMP_INTERVAL:
+            return self._win_temp_value
+        self._win_temp_read_at = now
+        try:
+            r = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-Command",
+                 "(Get-WmiObject MSAcpi_ThermalZoneTemperature -Namespace root/wmi).CurrentTemperature"],
+                capture_output=True, text=True, timeout=3
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                raw = float(r.stdout.strip().split("\n")[0])
+                self._win_temp_value = (raw / 10.0) - 273.15
+                return self._win_temp_value
+        except Exception:
+            pass
+        self._win_temp_available = False
         return -1.0
 
     def snapshot(self) -> dict:
