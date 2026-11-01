@@ -24,6 +24,9 @@ unreleased repository work; it does not imply a published release.
 
 ### Changed
 
+- The Windows desktop app no longer flashes PowerShell or console windows:
+  background subprocesses run hidden, and the HUD stops its PowerShell
+  temperature probe when it fails and otherwise reads it every 15 s.
 - New app icon from the pixel-art portrait in `assets/argus-icon.png`, used by
   `ARGUS.exe`, the installer, the desktop window and the tray. The window title,
   tray tooltip and setup screen now say ARGUS instead of J.A.R.V.I.S.
