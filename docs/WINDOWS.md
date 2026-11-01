@@ -24,6 +24,9 @@ on GitHub:
 - [`ARGUS-windows-x64-portable.zip`](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-windows-x64-portable.zip): portable copy. Extract it anywhere you
   can write to and run `ARGUS.exe` or `argus.com` from that folder.
 
+Each release also lists `SHA256SUMS.txt` to check the downloads against
+(`Get-FileHash <file>` in PowerShell).
+
 The build is not code-signed yet, so SmartScreen may warn on first run. Choose
 **More info → Run anyway**.
 
