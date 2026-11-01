@@ -7,6 +7,11 @@ unreleased repository work; it does not imply a published release.
 
 ### Added
 
+- Added macOS (arm64 `.dmg`) and Linux (x86_64 `.deb` and `.tar.gz`) builds
+  to the `Build and release` workflow (formerly `Windows build`), with smoke
+  tests of the installed, read-only app. On macOS and Linux one executable
+  opens the CLI in a terminal and the desktop window otherwise. Version 0.3.0.
+  See [`docs/MACOS_LINUX.md`](docs/MACOS_LINUX.md).
 - Added the Windows app: one PyInstaller bundle with `ARGUS.exe` (desktop)
   and `argus.com` (terminal CLI), a per-user Inno Setup installer, a portable
   zip, and a `Windows build` workflow that publishes both on `v*` tags. See

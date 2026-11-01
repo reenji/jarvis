@@ -5,7 +5,9 @@ Local Gemini Live desktop assistant with a PyQt6 interface, voice interaction, d
 ARGUS is the product name; its source repository is [`reenji/jarvis`](https://github.com/reenji/jarvis).
 
 [![Download ARGUS for Windows](https://img.shields.io/badge/Download-Windows%20x64-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-windows-x64-setup.exe)
-[![Portable zip](https://img.shields.io/badge/Portable-zip-00c8ff?style=for-the-badge)](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-windows-x64-portable.zip)
+[![Download ARGUS for macOS](https://img.shields.io/badge/Download-macOS%20arm64-111111?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-macos-arm64.dmg)
+[![Download ARGUS for Linux](https://img.shields.io/badge/Download-Linux%20.deb-E95420?style=for-the-badge&logo=ubuntu&logoColor=white)](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-linux-x86_64.deb)
+[![Portable zip](https://img.shields.io/badge/Windows-portable%20zip-00c8ff?style=for-the-badge)](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-windows-x64-portable.zip)
 [![All releases](https://img.shields.io/github/v/release/reenji/jarvis?style=for-the-badge&label=release)](https://github.com/reenji/jarvis/releases/latest)
 
 ARGUS also includes a dedicated presentation studio that creates, edits,
@@ -34,6 +36,15 @@ or the [portable zip](https://github.com/reenji/jarvis/releases/latest/download/
 release. It installs `ARGUS.exe` for the desktop assistant and the `argus`
 terminal command, without Python. See
 [docs/WINDOWS.md](docs/WINDOWS.md).
+
+## macOS and Linux apps
+
+On macOS 13 or newer with Apple silicon, open the [disk image](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-macos-arm64.dmg)
+and drag ARGUS to Applications. On Ubuntu 22.04+ or Debian 12+ (x86_64),
+install the [.deb](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-linux-x86_64.deb) with
+`sudo apt install ./ARGUS-linux-x86_64.deb`, or use the
+[portable tarball](https://github.com/reenji/jarvis/releases/latest/download/ARGUS-linux-x86_64.tar.gz). See
+[docs/MACOS_LINUX.md](docs/MACOS_LINUX.md).
 
 ## Quick start (Windows, macOS, Linux)
 
@@ -211,6 +222,7 @@ installs the same `argus` command through the standard Python package entry poin
 ## Documentation
 
 - [Windows app and installer](docs/WINDOWS.md)
+- [macOS and Linux apps](docs/MACOS_LINUX.md)
 - [Usage guide](docs/USAGE.md)
 - [Tutorial](docs/TUTORIAL.md)
 - [Complete QA and bug-audit guide](docs/QA.md)
