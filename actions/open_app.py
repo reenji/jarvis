@@ -143,6 +143,9 @@ def _launch_windows(app_name: str) -> bool:
                     shell=False,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
+                    # The user asked for this app: a console one (PowerShell,
+                    # cmd) must get its own visible window. No effect on GUI apps.
+                    creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0),
                 )
             return True
         except Exception as e:

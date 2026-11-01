@@ -29,6 +29,9 @@ unreleased repository work; it does not imply a published release.
 
 ### Changed
 
+- The Windows desktop app no longer flashes PowerShell or console windows:
+  background subprocesses run hidden, and the HUD stops its PowerShell
+  temperature probe when it fails and otherwise reads it every 15 s.
 - Packaged builds read bundled files (prompt, fonts, icon) from the bundle and
   keep `config/`, `memory/`, `outputs/` and `.env` in a per-user data folder:
   beside `ARGUS.exe` on Windows (unchanged), `~/Library/Application Support/Argus`
