@@ -15,6 +15,13 @@ class LauncherModeTests(unittest.TestCase):
     def test_bare_command_in_a_terminal_starts_the_cli(self):
         self.assertEqual(choose_mode([], has_console=True), "cli")
 
+    def test_bare_command_without_a_terminal_opens_the_desktop_window(self):
+        # Finder, the Dock or a Linux app menu: streams exist but no terminal.
+        self.assertEqual(choose_mode([], has_console=True, interactive=False), "desktop")
+
+    def test_cli_arguments_run_even_without_a_terminal(self):
+        self.assertEqual(choose_mode(["ask", "oi"], has_console=True, interactive=False), "cli")
+
     def test_cli_arguments_run_in_the_console_build(self):
         for argv in (["chat"], ["setup"], ["doctor"], ["--version"], ["-q", "oi"], ["ask", "oi"]):
             with self.subTest(argv=argv):
@@ -36,9 +43,17 @@ class LauncherModeTests(unittest.TestCase):
 class LauncherDispatchTests(unittest.TestCase):
     def test_cli_mode_forwards_arguments_unchanged(self):
         with patch.object(argus_launcher, "_has_console", return_value=True), \
+                patch.object(argus_launcher, "_interactive", return_value=True), \
                 patch("cli.app.main", return_value=0) as cli_main:
             self.assertEqual(argus_launcher.main(["ask", "oi"]), 0)
         cli_main.assert_called_once_with(["ask", "oi"])
+
+    def test_finder_process_serial_number_is_ignored(self):
+        with patch.object(argus_launcher, "_has_console", return_value=True), \
+                patch.object(argus_launcher, "_interactive", return_value=False), \
+                patch.object(argus_launcher, "_run_desktop", return_value=0) as run_desktop:
+            self.assertEqual(argus_launcher.main(["-psn_0_12345"]), 0)
+        run_desktop.assert_called_once_with([])
 
     def test_relaunch_fails_cleanly_without_the_console_build(self):
         with patch.object(argus_launcher.sys, "executable", str(Path("/nonexistent/ARGUS.exe"))), \
