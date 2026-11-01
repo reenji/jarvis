@@ -1,6 +1,6 @@
 # Argus licensing client
 
-The CLI license client is in `core/license.py`. It defaults to the deployed Argus endpoint at `https://iugvqlbyflrqlnninrlg.supabase.co/functions/v1/license`. Set `ARGUS_LICENSE_API_URL` only when using another deployment. The optional `ARGUS_LICENSE_RENEW_URL` controls links shown in status banners.
+The CLI license client is in `core/license.py`. It defaults to the license route of the Argus site gateway, `https://argusdev.pages.dev/api/license`, which forwards `/activate` and `/deactivate` to the license Edge Function along with the caller's IP for rate limiting. Set `ARGUS_LICENSE_API_URL` only when using another deployment. The optional `ARGUS_LICENSE_RENEW_URL` controls links shown in status banners.
 
 ## Operator setup
 
