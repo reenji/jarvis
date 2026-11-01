@@ -15,7 +15,7 @@ class WindowsReleaseNameTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.installer = (ROOT / "installer" / "argus.iss").read_text(encoding="utf-8")
-        cls.workflow = (ROOT / ".github" / "workflows" / "windows.yml").read_text(encoding="utf-8")
+        cls.workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
         cls.readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
     def test_installer_name_is_stable_and_uploaded(self):
@@ -34,6 +34,40 @@ class WindowsReleaseNameTests(unittest.TestCase):
 
     def test_release_publishes_checksums_for_the_downloads(self):
         self.assertIn("sha256sum ARGUS-* > SHA256SUMS.txt", self.workflow)
+
+    def test_release_waits_for_every_platform(self):
+        self.assertIn("needs: [windows, linux, macos]", self.workflow)
+
+
+class MacosLinuxReleaseNameTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+        cls.readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        cls.linux = (ROOT / "scripts" / "package_linux.sh").read_text(encoding="utf-8")
+        cls.macos = (ROOT / "scripts" / "package_macos.sh").read_text(encoding="utf-8")
+
+    def test_linux_packages_are_built_uploaded_and_linked(self):
+        for name in ("ARGUS-linux-x86_64.deb", "ARGUS-linux-x86_64.tar.gz"):
+            with self.subTest(name=name):
+                self.assertIn(f'"$out/{name}"', self.linux)
+                self.assertIn(f"dist/{name}", self.workflow)
+                self.assertIn(f"{LATEST}{name}", self.readme)
+
+    def test_macos_disk_image_is_built_uploaded_and_linked(self):
+        name = "ARGUS-macos-arm64.dmg"
+        self.assertIn(f'"$out/{name}"', self.macos)
+        self.assertIn(f"dist/{name}", self.workflow)
+        self.assertIn(f"{LATEST}{name}", self.readme)
+
+    def test_linux_menu_entry_opens_the_desktop_window(self):
+        self.assertIn("Exec=/usr/lib/argus/ARGUS desktop", self.linux)
+        self.assertIn("ln -s ../lib/argus/ARGUS", self.linux)
+
+    def test_macos_bundle_declares_microphone_use_and_version(self):
+        spec = (ROOT / "ARGUS.spec").read_text(encoding="utf-8")
+        self.assertIn("'NSMicrophoneUsageDescription'", spec)
+        self.assertIn("'CFBundleShortVersionString': VERSION", spec)
 
 
 
