@@ -38,9 +38,10 @@ jobs:
           "value=$version" >> $env:GITHUB_OUTPUT
 
       - run: pyinstaller --noconfirm ARGUS.spec
-      - name: Check the CLI terminal libraries are bundled
+      - name: Check key libraries are bundled
         run: |
-          foreach ($module in "'rich'", "'prompt_toolkit'") {
+          # pywinauto is skipped by the DLL probe in ARGUS.spec but must still ship.
+          foreach ($module in "'rich'", "'prompt_toolkit'", "'pywinauto'") {
             if (-not (Select-String -Path build\ARGUS\PYZ-00.toc -Pattern $module -SimpleMatch -Quiet)) { throw "$module missing from the bundle" }
           }
 

@@ -35,6 +35,27 @@ for package in APP_PACKAGES:
     # main.py and ui/ load modules by name at runtime, so static analysis misses them.
     hiddenimports += package_modules(package)
 
+# On Windows, PyInstaller imports every collected package in one child process to
+# find DLL search paths. Importing pywinauto starts UI Automation over COM, which
+# can crash that child on a headless runner (exit 0xC0000005). pywinauto is pure
+# Python and adds no DLL paths, so it is left out of that probe only; it is still
+# bundled.
+PROBE_SKIP = ('pywinauto',)
+
+if sys.platform == 'win32':
+    import PyInstaller.building.build_main as build_main
+
+    _find_binary_dependencies = build_main.find_binary_dependencies
+
+    def find_binary_dependencies(binaries, import_packages, *args, **kwargs):
+        probed = [
+            name for name in import_packages
+            if not any(name == skip or name.startswith(skip + '.') for skip in PROBE_SKIP)
+        ]
+        return _find_binary_dependencies(binaries, probed, *args, **kwargs)
+
+    build_main.find_binary_dependencies = find_binary_dependencies
+
 a = Analysis(
     ['argus_launcher.py'],
     pathex=[],

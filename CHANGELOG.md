@@ -24,6 +24,8 @@ unreleased repository work; it does not imply a published release.
 
 ### Changed
 
+- The Windows build skips importing pywinauto while PyInstaller probes for DLL
+  search paths, which crashed on CI; pywinauto is still bundled.
 - The live session config defaults to voice until license entitlements
   load, instead of failing when `voice_enabled` is not set yet.
 - The license client calls the Argus site gateway (`https://argusdev.pages.dev/api/license`)
