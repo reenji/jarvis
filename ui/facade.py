@@ -29,6 +29,9 @@ class ArgusUI:
         _configure_intro_tts_renderers(intro_tts_renderer, segmented_intro_tts_renderer)
         self._app = QApplication.instance() or QApplication(sys.argv)
         self._app.setStyle("Fusion")
+        if APP_ICON_FILE.exists():
+            # Window title bar and taskbar use the same artwork as ARGUS.exe.
+            self._app.setWindowIcon(QIcon(str(APP_ICON_FILE)))
 
         self._win = MainWindow(face_path)
         self._win.show()

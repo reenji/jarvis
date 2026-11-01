@@ -473,18 +473,21 @@ class _MainWindowStartupMixin:
     def _setup_system_tray(self):
         self._force_quit = False
         self._tray = QSystemTrayIcon(self)
-        # Create a simple icon programmatically
-        px = QPixmap(32, 32)
-        px.fill(QColor(0, 0, 0, 0))
-        p = QPainter(px)
-        p.setRenderHint(QPainter.RenderHint.Antialiasing)
-        p.setPen(QPen(qcol(C.PRI), 2))
-        p.drawEllipse(4, 4, 24, 24)
-        p.setBrush(QBrush(qcol(C.ENERGY)))
-        p.drawEllipse(10, 10, 12, 12)
-        p.end()
-        self._tray.setIcon(QIcon(px))
-        self._tray.setToolTip("J.A.R.V.I.S — MARK XXXIX")
+        if APP_ICON_FILE.exists():
+            self._tray.setIcon(QIcon(str(APP_ICON_FILE)))
+        else:
+            # Fallback when assets/ is missing: a simple drawn icon.
+            px = QPixmap(32, 32)
+            px.fill(QColor(0, 0, 0, 0))
+            p = QPainter(px)
+            p.setRenderHint(QPainter.RenderHint.Antialiasing)
+            p.setPen(QPen(qcol(C.PRI), 2))
+            p.drawEllipse(4, 4, 24, 24)
+            p.setBrush(QBrush(qcol(C.ENERGY)))
+            p.drawEllipse(10, 10, 12, 12)
+            p.end()
+            self._tray.setIcon(QIcon(px))
+        self._tray.setToolTip("ARGUS")
 
         tray_menu = QMenu()
         tray_menu.setStyleSheet(f"""
