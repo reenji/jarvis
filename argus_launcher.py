@@ -1,0 +1,77 @@
+"""Single entry point for the packaged ARGUS app.
+
+The Windows bundle ships two executables built from this script:
+
+- ``ARGUS.exe`` (windowed) opens the desktop assistant on a double click.
+- ``argus.com`` (console) runs the terminal CLI. ``cmd`` and PowerShell try
+  ``.com`` before ``.exe`` (PATHEXT order), so typing ``argus chat`` in a
+  terminal reaches the console build even though both sit in one folder.
+
+``argus desktop`` opens the desktop window from a terminal, and the windowed
+build hands any CLI arguments to its console sibling in a new console window.
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+from collections.abc import Sequence
+from pathlib import Path
+
+
+DESKTOP_COMMANDS = frozenset({"desktop", "app"})
+CONSOLE_EXECUTABLE = "argus.com"
+
+
+def choose_mode(argv: Sequence[str], *, has_console: bool) -> str:
+    """Return ``desktop``, ``cli`` or ``relaunch`` for the given arguments."""
+    if argv and (argv[0] in DESKTOP_COMMANDS or argv[0] == "--self-test"):
+        return "desktop"
+    if not argv:
+        return "cli" if has_console else "desktop"
+    # Any other arguments belong to the CLI parser, which reports bad ones.
+    return "cli" if has_console else "relaunch"
+
+
+def _has_console() -> bool:
+    # PyInstaller windowed builds run without standard streams.
+    return sys.stdout is not None
+
+
+def _run_desktop(argv: Sequence[str]) -> int:
+    os.environ["ARGUS_CLI"] = "1"
+    rest = list(argv[1:]) if argv and argv[0] in DESKTOP_COMMANDS else list(argv)
+    sys.argv = [sys.argv[0], *rest]
+    import main as desktop
+
+    return desktop.main() or 0
+
+
+def _run_cli(argv: Sequence[str]) -> int:
+    from cli.app import main as cli_main
+
+    return cli_main(list(argv))
+
+
+def _relaunch_in_console(argv: Sequence[str]) -> int:
+    console = Path(sys.executable).with_name(CONSOLE_EXECUTABLE)
+    if not console.exists():
+        return 2
+    flags = getattr(subprocess, "CREATE_NEW_CONSOLE", 0)
+    subprocess.Popen([str(console), *argv], creationflags=flags)
+    return 0
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    args = list(sys.argv[1:] if argv is None else argv)
+    mode = choose_mode(args, has_console=_has_console())
+    if mode == "desktop":
+        return _run_desktop(args)
+    if mode == "relaunch":
+        return _relaunch_in_console(args)
+    return _run_cli(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
