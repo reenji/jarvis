@@ -23,6 +23,13 @@ existing setup scripts. Use `requirements-desktop.txt` or `requirements-api.txt`
 for a focused runtime install, and `requirements-dev.txt` for the full test and
 QA environment.
 
+## Windows app
+
+On Windows 10 or 11, download `ARGUS-Setup-<version>.exe` (or the portable
+zip) from the latest GitHub release. It installs `ARGUS.exe` for the desktop
+assistant and the `argus` terminal command, without Python. See
+[docs/WINDOWS.md](docs/WINDOWS.md).
+
 ## Quick start (Windows, macOS, Linux)
 
 In Terminal, run:
@@ -198,6 +205,7 @@ installs the same `argus` command through the standard Python package entry poin
 
 ## Documentation
 
+- [Windows app and installer](docs/WINDOWS.md)
 - [Usage guide](docs/USAGE.md)
 - [Tutorial](docs/TUTORIAL.md)
 - [Complete QA and bug-audit guide](docs/QA.md)
