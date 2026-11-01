@@ -36,5 +36,26 @@ class WindowsReleaseNameTests(unittest.TestCase):
         self.assertIn("sha256sum ARGUS-* > SHA256SUMS.txt", self.workflow)
 
 
+
+class AppIconTests(unittest.TestCase):
+    def test_icon_is_built_from_the_square_pixel_art(self):
+        from PIL import Image
+
+        art = Image.open(ROOT / "assets" / "argus-icon.png")
+        self.assertEqual(art.width, art.height)
+        icon = Image.open(ROOT / "assets" / "argus.ico")
+        self.assertEqual(
+            sorted(icon.info["sizes"]),
+            [(size, size) for size in (16, 24, 32, 48, 64, 128, 256)],
+        )
+
+    def test_executables_installer_and_window_share_the_icon(self):
+        spec = (ROOT / "ARGUS.spec").read_text(encoding="utf-8")
+        self.assertIn("icon='assets/argus.ico'", spec)
+        self.assertIn("('assets/argus.ico', 'assets')", spec)
+        self.assertIn(r"SetupIconFile=..\assets\argus.ico", (ROOT / "installer" / "argus.iss").read_text(encoding="utf-8"))
+        runtime = (ROOT / "ui" / "_runtime.py").read_text(encoding="utf-8")
+        self.assertIn('APP_ICON_FILE = BASE_DIR / "assets" / "argus.ico"', runtime)
+
 if __name__ == "__main__":
     unittest.main()
