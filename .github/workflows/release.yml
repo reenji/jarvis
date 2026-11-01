@@ -106,7 +106,8 @@ jobs:
         run: |
           sudo apt-get install -y ./dist/ARGUS-linux-x86_64.deb
           test -f /usr/share/applications/argus.desktop
-          test "$(readlink -f "$(command -v argus)")" = /usr/lib/argus/ARGUS
+          # /usr/bin/argus, not `command -v argus`: pip install . also put an argus on PATH.
+          test "$(readlink -f /usr/bin/argus)" = /usr/lib/argus/ARGUS
       # The installed copy is read-only for the runner user, like on a real system.
       - name: Smoke test the installed build
         run: scripts/smoke_unix_build.sh /usr/lib/argus/ARGUS
