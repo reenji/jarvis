@@ -131,6 +131,8 @@ if sys.platform == 'darwin':
             'CFBundleShortVersionString': VERSION,
             'CFBundleVersion': VERSION,
             'NSHighResolutionCapable': True,
+            # Matches the macOS 13+ requirement in the README; the runner is newer.
+            'LSMinimumSystemVersion': '13.0',
             # Without these, macOS stops the app when voice or screen tools start.
             'NSMicrophoneUsageDescription': 'Argus listens to your voice commands.',
             'NSAppleEventsUsageDescription': 'Argus controls apps you ask it to use.',
