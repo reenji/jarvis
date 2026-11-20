@@ -3,7 +3,23 @@
 Notable changes to ARGUS are recorded here. This file tracks the current
 unreleased repository work; it does not imply a published release.
 
-## Unreleased — 2026-10-02
+## 0.3.1 — Unreleased
+
+### Fixed
+
+- Reminder notifications, the YouTube URL dialog, the onboarding log and the
+  automation research prompt show ARGUS instead of the old J.A.R.V.I.S and
+  MARK XXXIX names (#59).
+- `main`, the TTS engine, screen processing and the audio backend import
+  `sounddevice` only when audio is used, so the app and the test suite start
+  on machines without a working audio server (#60).
+
+### Changed
+
+- The migration status and decisions record that the desktop app stays next
+  to the CLI (#61).
+
+## 0.3.0 and earlier — 2026-11-01
 
 ### Added
 
