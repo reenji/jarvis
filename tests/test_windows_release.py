@@ -69,6 +69,13 @@ class MacosLinuxReleaseNameTests(unittest.TestCase):
         self.assertIn("'NSMicrophoneUsageDescription'", spec)
         self.assertIn("'CFBundleShortVersionString': VERSION", spec)
 
+    def test_docs_name_the_runners_the_release_workflow_uses(self):
+        docs = (ROOT / "docs" / "MACOS_LINUX.md").read_text(encoding="utf-8")
+        runners = re.findall(r"^    runs-on: (macos-\S+|ubuntu-\d\S*)$", self.workflow, re.MULTILINE)
+        self.assertEqual(len(runners), 2)
+        for runner in runners:
+            self.assertIn(f"`{runner}`", docs)
+
 
 
 class AppIconTests(unittest.TestCase):
