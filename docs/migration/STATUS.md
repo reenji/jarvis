@@ -28,6 +28,12 @@ Migration plan source: attached PDF, reviewed before implementation.
 - Branch every pull request from main. Stacked PRs #24–#46 were merged into their base branches and never reached main.
 - Check that a pull request is still open before pushing more commits to its branch.
 
-## Phase 0 result
+## Current state
 
-The repository inventory and migration decisions are committed on feat/cli-inventory. Phase 0 changed documentation only; Phase 1 defines adapter boundaries and retains the desktop and hosted clients. Phase 2 now meets its CLI, session, banner, voice-switch, and cancellation requirements. Phase 3 adds setup, configuration, and doctor in its own feature PR. Phase 4 adds bounded Windows screen interaction and safety behavior; real desktop validation remains pending. Phase 5 adds optional Gemini Live voice mode; real microphone and speaker validation remains pending. Phase 6 packaging is implemented on feat/cli-packaging and awaits hosted CI. Phase 7 remains deferred until the full pre-removal suite and manual validation gates pass.
+Phases 0–6 are merged into main. The desktop app stays: `.github/workflows/release.yml` builds the Windows installer and portable zip, the macOS disk image and the Linux .deb and tarball from each `v*` tag, and the same install provides the `argus` CLI.
+
+Still open:
+
+- Phase 4: screen control checked on a real Windows desktop.
+- Phase 5: voice mode checked with a real microphone and speaker.
+- The hidden child consoles from #58, which only show on real Windows.
