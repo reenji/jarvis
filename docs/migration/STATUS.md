@@ -25,8 +25,8 @@ Migration plan source: attached PDF, reviewed before implementation.
 - Each feature pull request contains exactly five meaningful commits.
 - Each bug-fix pull request contains exactly three meaningful commits.
 - Feature branches use feat/slug; bug-fix branches use bugfix/slug.
-- Dependent pull requests may be stacked on the preceding open branch, with the base recorded in each PR.
-- Do not create the app-final tag until the last commit containing the desktop app is known and the removal phase is ready.
+- Branch every pull request from main. Stacked PRs #24–#46 were merged into their base branches and never reached main.
+- Check that a pull request is still open before pushing more commits to its branch.
 
 ## Phase 0 result
 
