@@ -1,7 +1,8 @@
 # CLI migration status
 
 Repository: reenji/jarvis
-Active branch: feat/cli-terminal-parity (stacked on feat/cli-parity)
+Active branch: main (all CLI migration branches are merged)
+Current release: v0.3.0 (Windows, macOS and Linux desktop builds plus the `argus` CLI)
 Migration plan source: attached PDF, reviewed before implementation.
 
 ## Progress
@@ -14,9 +15,9 @@ Migration plan source: attached PDF, reviewed before implementation.
 | 3. Setup, configuration, and doctor | Implemented | Adds hidden-key setup, private user config, redacted config commands, and local/API diagnostics. Clean-install verification depends on Phase 6 packaging. PR is stacked on Phase 2. |
 | 4. Desktop tools | Implemented; desktop validation pending | Bounded Windows screen control, terminal protection, app focus delay, sensitive-share guard, anti-bot stop, and opt-in local debug screenshots. |
 | 5. Optional voice | Implemented; live hardware validation pending | Adds Gemini Live terminal mode, saved default-mode preference, full-turn transcripts, lazy audio loading, and text fallback when audio support or devices are unavailable. |
-| 6. Packaging and installation | Implemented; local clean-wheel validation passed; hosted CI pending | Adds dependency extras, GitHub-based pipx/uv installers for macOS/Linux and Windows, and an isolated wheel smoke check. Keeps hosted API/web manifests and deployment workflows. |
-| 7. Retire the desktop app | Pending | Only after the replacement CLI is usable and verified. |
-| 8. Final tests, CI, and documentation | In progress before Phase 7 | Packaging CI gate is added; full pre-removal suite, hosted CI, and manual desktop/voice validation remain. |
+| 6. Packaging and installation | Complete | Adds dependency extras, GitHub-based pipx/uv installers for macOS/Linux and Windows, and an isolated wheel smoke check. Keeps hosted API/web manifests and deployment workflows. |
+| 7. Retire the desktop app | Dropped | The owner decided on 2026-10-31 that the desktop app is the ARGUS product; it ships next to the CLI. |
+| 8. Final tests, CI, and documentation | In progress | Full suite and the cli-package gate run in hosted CI; manual desktop and voice validation remain. |
 
 ## Execution rules
 
@@ -24,9 +25,15 @@ Migration plan source: attached PDF, reviewed before implementation.
 - Each feature pull request contains exactly five meaningful commits.
 - Each bug-fix pull request contains exactly three meaningful commits.
 - Feature branches use feat/slug; bug-fix branches use bugfix/slug.
-- Dependent pull requests may be stacked on the preceding open branch, with the base recorded in each PR.
-- Do not create the app-final tag until the last commit containing the desktop app is known and the removal phase is ready.
+- Branch every pull request from main. Stacked PRs #24–#46 were merged into their base branches and never reached main.
+- Check that a pull request is still open before pushing more commits to its branch.
 
-## Phase 0 result
+## Current state
 
-The repository inventory and migration decisions are committed on feat/cli-inventory. Phase 0 changed documentation only; Phase 1 defines adapter boundaries and retains the desktop and hosted clients. Phase 2 now meets its CLI, session, banner, voice-switch, and cancellation requirements. Phase 3 adds setup, configuration, and doctor in its own feature PR. Phase 4 adds bounded Windows screen interaction and safety behavior; real desktop validation remains pending. Phase 5 adds optional Gemini Live voice mode; real microphone and speaker validation remains pending. Phase 6 packaging is implemented on feat/cli-packaging and awaits hosted CI. Phase 7 remains deferred until the full pre-removal suite and manual validation gates pass.
+Phases 0–6 are merged into main. The desktop app stays: `.github/workflows/release.yml` builds the Windows installer and portable zip, the macOS disk image and the Linux .deb and tarball from each `v*` tag, and the same install provides the `argus` CLI.
+
+Still open:
+
+- Phase 4: screen control checked on a real Windows desktop.
+- Phase 5: voice mode checked with a real microphone and speaker.
+- The hidden child consoles from #58, which only show on real Windows.

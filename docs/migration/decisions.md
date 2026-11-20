@@ -4,7 +4,7 @@ These decisions adapt the attached migration plan to reenji/jarvis and the owner
 
 ## Scope
 
-- Replace the local PyQt desktop launcher with a terminal CLI.
+- Add a terminal CLI next to the local PyQt desktop app. The plan first replaced the desktop app; on 2026-10-31 the owner decided the desktop app is the ARGUS product, so it stays and ships with the CLI.
 - Preserve the independently deployable FastAPI service, Next.js client, database migrations, Docker setup, and their CI/deploy workflows. The migration request targets the desktop app; the PDF does not explicitly ask to retire the hosted product.
 - Preserve current Python runtime behavior and integrations while extracting them behind CLI-friendly interfaces; do not rewrite the agent or prompts as part of the transport change.
 
@@ -37,7 +37,7 @@ These decisions adapt the attached migration plan to reenji/jarvis and the owner
 - Keep text, Gemini, configuration/keyring, prompt handling, and the core local computer-control dependencies in the base install so `pipx install git+https://github.com/reenji/jarvis.git` provides the primary CLI features. Keep PyQt and voice audio out of that base.
 - Define optional `voice`, `browser`, `documents`, `integrations`, `tts`, and `api` extras from the module inventory. Voice is installed explicitly; the hosted API's existing `requirements-api.txt` remains its deployment source of truth.
 - Install from GitHub with `uv` when available and otherwise `pipx`. Do not publish to PyPI. Installer scripts check Python 3.11+, install the CLI, and invoke first-run setup; they do not alter user files outside ARGUS configuration/state.
-- Keep the app's `argus` console script and package discovery for core, tools, actions, and API modules. Do not remove UI packages or desktop build files until Phase 7.
+- Keep the app's `argus` console script and package discovery for core, tools, actions, and API modules. Keep the UI packages and desktop build files; the desktop app is not retired.
 
 ## Configuration storage
 
@@ -49,8 +49,8 @@ These decisions adapt the attached migration plan to reenji/jarvis and the owner
 
 - Every feature/change is isolated in its own feat/slug branch and PR with exactly five meaningful commits.
 - Every bug fix uses bugfix/slug and exactly three meaningful commits.
-- When a PR depends on an unmerged PR, stack it on that PR's branch so its diff contains only its own change. Do not merge or push directly to main.
+- Branch every PR from main instead of stacking it on another open PR; stacked PRs #24–#46 were merged into their bases and never reached main. Do not merge or push directly to main.
 
 ## Release marker
 
-Create app-final at the last commit that still contains the desktop app, immediately before the dedicated desktop-retirement change. Do not tag an intermediate inventory or CLI-foundation commit.
+The app-final tag is no longer needed: the desktop app is not retired. Releases use `v*` tags that match the version in `pyproject.toml`.
