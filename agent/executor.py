@@ -195,13 +195,13 @@ The following report was generated from live research results gathered by ARGUS.
 ## Practical Takeaways
 
 - Compare each tool based on reliability, cross-platform support, ease of use, and whether it fits the current project.
-- Prefer tools that are actively maintained and work well on macOS if this is being used inside the MARK XXXIX / ARGUS environment.
+- Prefer tools that are actively maintained and work well on macOS if this is being used inside the ARGUS environment.
 - For GUI control, prioritize libraries that handle screen scaling, permissions, screenshots, and app focus reliably.
 - For long-term automation, combine desktop control tools with file management, scheduling, memory, and logging.
 
 ## ARGUS Recommendation
 
-For a personal desktop assistant like MARK XXXIX, the strongest automation stack is usually:
+For a personal desktop assistant like ARGUS, the strongest automation stack is usually:
 
 1. PyAutoGUI or pyauto-desktop for mouse, keyboard, and screen interaction.
 2. pathlib and shutil for file automation.

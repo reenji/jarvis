@@ -108,7 +108,7 @@ class _MainWindowOnboardingMixin:
         self._log.append_log("SYS: PARALLAX UI COMPLETE   [OK]")
         self._log.append_log("SYS: VOICE SYNTHESIS READY  [OK]")
         self._log.append_log(f"SYS: PLATFORM {os_name.upper()} DETECTED")
-        self._log.append_log("SYS: ARGUS MARK XXXIX - ALL SYSTEMS NOMINAL")
+        self._log.append_log("SYS: ARGUS - ALL SYSTEMS NOMINAL")
         # After setup: show voice popup first, then name popup
         self._show_voice_select_then_name()
 
