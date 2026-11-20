@@ -68,6 +68,8 @@ class MacosLinuxReleaseNameTests(unittest.TestCase):
         spec = (ROOT / "ARGUS.spec").read_text(encoding="utf-8")
         self.assertIn("'NSMicrophoneUsageDescription'", spec)
         self.assertIn("'CFBundleShortVersionString': VERSION", spec)
+        self.assertIn("'LSMinimumSystemVersion': '13.0'", spec)
+        self.assertIn("macOS 13 or newer", self.readme)
 
     def test_docs_name_the_runners_the_release_workflow_uses(self):
         docs = (ROOT / "docs" / "MACOS_LINUX.md").read_text(encoding="utf-8")
