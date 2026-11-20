@@ -63,7 +63,7 @@ Trash, or `sudo apt remove argus`) leaves that folder in place.
 
 ## Build it yourself
 
-`.github/workflows/release.yml` builds macOS on `macos-14` and Linux on
+`.github/workflows/release.yml` builds macOS on `macos-15` and Linux on
 `ubuntu-22.04` next to Windows. Locally, with Python 3.12:
 
 ```bash
