@@ -8,7 +8,6 @@ import traceback
 from pathlib import Path
 from core.app_paths import data_dir, resource_dir
 
-import sounddevice as sd
 from google import genai
 from google.genai import types
 from api import status as argus_status
@@ -29,6 +28,13 @@ from core.voice_preferences import (
     normalize_silence_ms,
 )
 from core.tool_approval import ToolApprovalManager
+
+
+def _sd():
+    """Import sounddevice on first use; importing it starts PortAudio."""
+    import sounddevice
+
+    return sounddevice
 
 
 def _lazy_action(module_name: str, attribute: str):
@@ -184,7 +190,8 @@ def wait_for_startup_claps(
         return True
 
     required = max(1, int(required))
-    stream_factory = stream_factory or sd.InputStream
+    use_real_stream = stream_factory is None
+    stream_factory = stream_factory or _sd().InputStream
     try:
         import numpy as np
     except ImportError:
@@ -246,9 +253,9 @@ def wait_for_startup_claps(
     sample_rates = [SEND_SAMPLE_RATE, 44100, 48000]
     input_device = None
     try:
-        if stream_factory is sd.InputStream:
+        if use_real_stream:
             try:
-                default_device = sd.default.device
+                default_device = _sd().default.device
                 try:
                     input_index = int(default_device[0])
                 except (TypeError, IndexError, ValueError):
@@ -260,7 +267,7 @@ def wait_for_startup_claps(
                         return True
                     raise RuntimeError("no default microphone device")
                 input_device = input_index
-                device = sd.query_devices(input_device if input_device is not None else None, "input")
+                device = _sd().query_devices(input_device if input_device is not None else None, "input")
                 if int(device.get("max_input_channels", 0)) < 1:
                     raise RuntimeError("no input channels are available")
                 native_rate = int(float(device.get("default_samplerate", 0)))
@@ -272,11 +279,11 @@ def wait_for_startup_claps(
         last_error = None
         for sample_rate in sample_rates:
             try:
-                if stream_factory is sd.InputStream:
+                if use_real_stream:
                     # Validate the format before constructing a live AUHAL
                     # stream; macOS can report a device but reject it with
                     # PaErrorCode -9986 during stream startup.
-                    sd.check_input_settings(
+                    _sd().check_input_settings(
                         device=input_device,
                         samplerate=sample_rate,
                         channels=CHANNELS,
@@ -2043,7 +2050,7 @@ class ArgusLive:
                 )
 
         try:
-            with sd.InputStream(
+            with _sd().InputStream(
                 samplerate=SEND_SAMPLE_RATE,
                 channels=CHANNELS,
                 dtype="int16",
@@ -2163,7 +2170,7 @@ class ArgusLive:
 
         stream = None
         if not self.external_audio:
-            stream = sd.RawOutputStream(
+            stream = _sd().RawOutputStream(
                 samplerate=RECEIVE_SAMPLE_RATE,
                 channels=CHANNELS,
                 dtype="int16",

@@ -16,7 +16,13 @@ from typing import Optional
 from memory.config_manager import get_gemini_key
 
 import numpy as np
-import sounddevice as sd
+
+def _sd():
+    """Import sounddevice on first use; importing it starts PortAudio."""
+    import sounddevice
+
+    return sounddevice
+
 
 def _get_voice_name() -> str:
     """Read voice name dynamically so it picks up runtime changes."""
@@ -432,7 +438,7 @@ class _VisionSession:
                 raise
 
     async def _play_loop(self) -> None:
-        stream = sd.RawOutputStream(
+        stream = _sd().RawOutputStream(
             samplerate=_RECEIVE_SAMPLE_RATE,
             channels=_CHANNELS,
             dtype="int16",
