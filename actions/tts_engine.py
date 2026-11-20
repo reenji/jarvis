@@ -7,7 +7,6 @@ import threading
 from typing import Callable
 
 import numpy as np
-import sounddevice as sd
 from core.voice_catalog import (
     DEFAULT_PROVIDER,
     DEFAULT_VOICE_ID,
@@ -38,6 +37,13 @@ def _mp3_bytes_to_pcm(mp3_bytes: bytes) -> np.ndarray:
         return np.array([], dtype=np.int16)
 
 
+def _sd():
+    """Import sounddevice on first use; importing it starts PortAudio."""
+    import sounddevice
+
+    return sounddevice
+
+
 def _play_pcm(pcm: np.ndarray, on_start: Callable | None = None,
               on_stop: Callable | None = None) -> None:
     """Play int16 PCM array through sounddevice using RawOutputStream (blocking)."""
@@ -49,7 +55,7 @@ def _play_pcm(pcm: np.ndarray, on_start: Callable | None = None,
         if on_start:
             on_start()
         raw = pcm.tobytes()
-        stream = sd.RawOutputStream(
+        stream = _sd().RawOutputStream(
             samplerate=RECEIVE_SAMPLE_RATE,
             channels=1,
             dtype="int16",
