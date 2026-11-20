@@ -1,7 +1,8 @@
 # CLI migration status
 
 Repository: reenji/jarvis
-Active branch: feat/cli-terminal-parity (stacked on feat/cli-parity)
+Active branch: main (all CLI migration branches are merged)
+Current release: v0.3.0 (Windows, macOS and Linux desktop builds plus the `argus` CLI)
 Migration plan source: attached PDF, reviewed before implementation.
 
 ## Progress
