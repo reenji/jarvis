@@ -53,6 +53,18 @@ class CliPackagingMetadataTests(unittest.TestCase):
 
         self.assertEqual(__version__, self.project["version"])
 
+    def test_release_commands_in_docs_use_the_package_version(self):
+        version = self.project["version"]
+        windows = (ROOT / "docs" / "WINDOWS.md").read_text(encoding="utf-8")
+        unix = (ROOT / "docs" / "MACOS_LINUX.md").read_text(encoding="utf-8")
+        installer = (ROOT / "installer" / "argus.iss").read_text(encoding="utf-8")
+        self.assertIn(f"git tag v{version} && git push origin v{version}", windows)
+        self.assertIn(f"/DAppVersion={version} installer", windows)
+        self.assertIn(f"/DAppVersion={version} installer", installer)
+        self.assertIn(f"scripts/package_linux.sh {version} ", unix)
+        changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+        self.assertIn(f"## {version} ", changelog)
+
     def test_live_prompt_is_included_in_the_wheel(self):
         self.assertIn("prompt.txt", self.project_package_data("core"))
 
