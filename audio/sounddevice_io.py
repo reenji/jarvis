@@ -11,14 +11,22 @@ import asyncio
 import logging
 import threading
 import time
-from typing import Callable, Optional
-
-import sounddevice as sd
+from typing import TYPE_CHECKING, Callable, Optional
 
 from audio.base import AudioConfig, AudioInterface
 from config.settings import get_settings
 
+if TYPE_CHECKING:
+    import sounddevice as sd
+
 logger = logging.getLogger("argus.audio")
+
+
+def _sd():
+    """Import sounddevice on first use; importing it starts PortAudio."""
+    import sounddevice
+
+    return sounddevice
 
 
 class SounddeviceInputOutput(AudioInterface):
@@ -97,7 +105,7 @@ class SounddeviceInputOutput(AudioInterface):
                         self._safe_callback, data
                     )
 
-        self._input_stream = sd.InputStream(
+        self._input_stream = _sd().InputStream(
             samplerate=self._config.send_sample_rate,
             channels=self._config.channels,
             dtype="int16",
@@ -118,7 +126,7 @@ class SounddeviceInputOutput(AudioInterface):
     async def start_output(self) -> None:
         """Start audio output stream."""
         if not self._external_audio:
-            self._output_stream = sd.RawOutputStream(
+            self._output_stream = _sd().RawOutputStream(
                 samplerate=self._config.receive_sample_rate,
                 channels=self._config.channels,
                 dtype="int16",
