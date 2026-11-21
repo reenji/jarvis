@@ -59,7 +59,7 @@ dispatch, and on `v*` tags. A tag whose version matches `pyproject.toml`
 also publishes every installer as one GitHub release:
 
 ```bash
-git tag v0.3.1 && git push origin v0.3.1
+git tag v0.3.2 && git push origin v0.3.2
 ```
 
 To build locally on Windows with Python 3.12 and Inno Setup 6:
@@ -67,7 +67,7 @@ To build locally on Windows with Python 3.12 and Inno Setup 6:
 ```powershell
 python -m pip install -r requirements.txt . pyinstaller==6.22.3
 pyinstaller --noconfirm ARGUS.spec
-& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.3.1 installer\argus.iss
+& "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /DAppVersion=0.3.2 installer\argus.iss
 ```
 
 `dist\ARGUS\` holds the portable app and `dist\ARGUS-windows-x64-setup.exe`
