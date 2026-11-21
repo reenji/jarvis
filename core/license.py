@@ -32,9 +32,11 @@ FREE_ENTITLEMENTS = {
     "voice": False,
     "screen_control": False,
 }
+# The free plan has no key, so its daily limits live here. Keep them equal to the
+# "free" row of public.plans on the site (Site_argus migration 20261120100000_plan_daily_limits.sql).
 FREE_LIMITS = {
-    "daily_usage": None,
-    "web_search_daily": None,
+    "daily_usage": 25,
+    "web_search_daily": 5,
     "screen_control_daily": None,
     "max_devices": 0,
 }

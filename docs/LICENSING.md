@@ -18,4 +18,17 @@ The CLI license client is in `core/license.py`. It defaults to the license route
 
 The API receives only the Argus license key and the random `device_id`. Provider API keys, prompts, and conversation contents remain local to the application. Tokens are Ed25519 signed, have a maximum 24-hour lifetime, and cannot exceed the plan's validity. The CLI checks for updates hourly during a live session, allows a three-day grace period after token expiration while the paid plan itself remains valid, and falls back to free entitlements after that grace period.
 
-The Supabase schema and both Edge Functions are deployed. Numeric usage caps, prices, and manual payment instructions remain pending. Until the signing-key pair is configured and the public key is embedded in a CLI release, paid-license activation is not ready. Free use works without login or a license server.
+The Supabase schema and both Edge Functions are deployed. Manual payment instructions remain pending. Until the signing-key pair is configured and the public key is embedded in a CLI release, paid-license activation is not ready. Free use works without login or a license server.
+
+## Daily limits
+
+The app counts usage per UTC day in its local license state: each text message sent counts toward `daily_usage`, each `web_search` call toward `web_search_daily`, and each screen or computer-control tool call toward `screen_control_daily`. Voice turns are not counted. A paid plan's limits arrive in its signed token; the free plan has no key, so its limits come from `FREE_LIMITS` in `core/license.py`.
+
+| Plan | Text messages/day | Web searches/day | Screen actions/day |
+| --- | --- | --- | --- |
+| Free | 25 | 5 | not included |
+| Weekly | 150 | no plan limit | 40 |
+| Monthly | 500 | no plan limit | no plan limit |
+| Annual | 500 | no plan limit | no plan limit |
+
+The site's `public.plans` table is the source for paid plans (Site_argus migration `20261120100000_plan_daily_limits.sql`, editable from the `/admin/` panel). Keep `FREE_LIMITS` equal to its `free` row.

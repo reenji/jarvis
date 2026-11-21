@@ -243,6 +243,21 @@ def test_local_daily_usage_limit_is_enforced(tmp_path, monkeypatch):
     assert configured_limit == 120
 
 
+def test_free_plan_without_key_has_daily_text_and_search_limits(tmp_path, monkeypatch):
+    manager, _private_key = manager_for(tmp_path, monkeypatch)
+
+    assert manager.current_status()["state"] == "free"
+    assert manager.limit("daily_usage") == 25
+    assert manager.limit("web_search_daily") == 5
+    assert manager.limit("screen_control_daily") is None
+    for _ in range(5):
+        assert manager.consume("web_search_daily") == (True, 5)
+    assert manager.consume("web_search_daily") == (False, 5)
+    allowed, _limit = manager.consume("daily_usage", 25)
+    assert allowed is True
+    assert manager.consume("daily_usage") == (False, 25)
+
+
 def test_refresh_applies_changed_entitlements_from_server_matrix(tmp_path, monkeypatch):
     private_key, public_key = signing_material()
     replies = iter([
