@@ -3,7 +3,16 @@
 Notable changes to ARGUS are recorded here. This file tracks the current
 unreleased repository work; it does not imply a published release.
 
-## 0.3.1 — Unreleased
+## 0.3.2 — 2026-11-20
+
+### Changed
+
+- The free plan, which has no license key, now has daily limits: 25 text
+  messages and 5 web searches per UTC day, the same as the free row of the
+  site's plan table. Paid plans get their limits in the signed token. See
+  [`docs/LICENSING.md`](docs/LICENSING.md#daily-limits) (#64).
+
+## 0.3.1 — 2026-11-20
 
 ### Fixed
 
