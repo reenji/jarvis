@@ -70,7 +70,7 @@ Trash, or `sudo apt remove argus`) leaves that folder in place.
 python -m pip install -r requirements.txt . pyinstaller==6.22.3
 pyinstaller --noconfirm ARGUS.spec
 scripts/smoke_unix_build.sh dist/ARGUS/ARGUS           # Linux
-scripts/package_linux.sh 0.3.1                          # .deb + .tar.gz (needs dpkg-deb)
+scripts/package_linux.sh 0.3.2                          # .deb + .tar.gz (needs dpkg-deb)
 scripts/smoke_unix_build.sh dist/ARGUS.app/Contents/MacOS/ARGUS   # macOS
 scripts/package_macos.sh                                # .dmg
 ```
